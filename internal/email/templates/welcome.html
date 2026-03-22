@@ -1,0 +1,27 @@
+{{define "title"}}You're on the list!{{end}}
+{{define "header_text"}}You're on the list! 🎉{{end}}
+{{define "extra_styles"}}
+  .position-box { background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 10px; padding: 20px; text-align: center; margin: 24px 0; }
+  .position-box .number { font-size: 48px; font-weight: 800; color: #6366f1; line-height: 1; }
+  .position-box .label { color: #7c3aed; font-size: 14px; margin-top: 6px; }
+  .referral-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin: 24px 0; }
+  .referral-box .link { font-family: monospace; font-size: 13px; color: #6366f1; word-break: break-all; }
+{{end}}
+{{define "content"}}
+  <p>Your email is confirmed. You're officially on the <strong>{{.CampaignName}}</strong> waitlist.</p>
+
+  <div class="position-box">
+    <div class="number">#{{.Position}}</div>
+    <div class="label">Your position right now*</div>
+  </div>
+
+  <p><strong>Move up faster</strong> — share your referral link and climb the queue. Every person who joins via your link moves you up one spot.</p>
+
+  <div class="referral-box">
+    <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Your referral link:</p>
+    <p style="margin:0;" class="link">{{.ReferralLink}}</p>
+  </div>
+
+  <p><a href="{{.ReferralLink}}" class="btn">Share your link →</a></p>
+{{end}}
+{{define "footer_content"}}Sent by EarlyPass · * Positions are live and can change — others move up by referring friends, and so can you.{{end}}

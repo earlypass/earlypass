@@ -1,0 +1,9 @@
+Hi there!
+
+Thanks for joining the {{.CampaignName}} waitlist. Please confirm your email address by visiting the link below:
+
+{{.VerifyURL}}
+
+This link expires in 48 hours.
+
+If you didn't sign up, you can safely ignore this email.

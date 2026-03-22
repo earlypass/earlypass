@@ -1,0 +1,48 @@
+# Go
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+# Exception: embedded browser-side JS libraries used by the dashboard SPA
+!internal/dashboard/static/vendor/
+!dashboard/src/vendor/
+
+# Node / widget / dashboard
+node_modules/
+widget/dist/
+dashboard/dist/
+npm-debug.log*
+
+# Generated code is committed — regenerate with `make generate`
+# internal/api/generated/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+deploy/local-prod/.env.local-prod
+
+# Docker volumes
+.docker-data/
+
+# Test artifacts
+coverage.out
+coverage.html
+
+# Helm
+helm/earlypass/charts/
+
+.claude
+helm/infrastructure/charts/*.tgz

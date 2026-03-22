@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "ES2020",
+    "moduleResolution": "bundler",
+    "strict": false,
+    "noEmit": true,
+    "lib": ["ES2017", "DOM"]
+  },
+  "include": ["src/**/*"]
+}

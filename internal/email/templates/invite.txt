@@ -1,0 +1,14 @@
+You're in — {{.CampaignName}} early access
+
+Great news! You've been granted early access to {{.CampaignName}}.
+
+You were one of the first in line, and we're excited to have you.
+{{if .InviteLink}}
+Get started here: {{.InviteLink}}
+{{else if .ProductURL}}
+Get started here: {{.ProductURL}}
+{{end}}
+Welcome aboard!
+
+---
+Sent by EarlyPass on behalf of {{.CampaignName}}

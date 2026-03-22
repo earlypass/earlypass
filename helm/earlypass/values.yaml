@@ -1,0 +1,110 @@
+# EarlyPass Helm chart — default values for self-hosting.
+# Override with --set or -f myvalues.yaml
+
+# ── Image ──────────────────────────────────────────────────────────────────
+image:
+  repository: ghcr.io/earlypass/earlypass
+  tag: ""           # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Replicas ───────────────────────────────────────────────────────────────
+replicaCount: 1
+
+# ── Service Account ────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  # Defaults to the release fullname when empty.
+  name: ""
+  annotations: {}
+
+# ── Resources ──────────────────────────────────────────────────────────────
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# ── Application config (non-secret env vars) ──────────────────────────────
+config:
+  port: "3000"
+  # Public base URL of the API server (no trailing slash).
+  # Example: "https://waitlist.yourdomain.com"
+  baseUrl: ""
+  # Comma-separated CIDR ranges trusted to set X-Real-IP / X-Forwarded-For.
+  # Set this when running behind a reverse proxy or load balancer.
+  # Example: "10.0.0.0/8,172.16.0.0/12"
+  trustedProxies: ""
+  devMode: "false"
+  # OTLP gRPC endpoint for traces and metrics (optional).
+  # Example: "otel-collector.monitoring:4317"
+  otelEndpoint: ""
+
+# ── Secrets ────────────────────────────────────────────────────────────────
+# Values here are rendered into a Kubernetes Secret.
+# For production, consider using an external secrets operator instead.
+secrets:
+  # Required: PostgreSQL connection string.
+  # Example: "postgresql://earlypass:password@postgres:5432/earlypass?sslmode=require"
+  databaseUrl: ""
+  # Required: Redis connection string.
+  # Example: "redis://redis:6379"
+  redisUrl: ""
+  # Resend API key for transactional email (signup verification, invite emails).
+  # Leave empty to disable email sending.
+  resendApiKey: ""
+  emailFrom: ""
+  # HMAC-SHA256 key for dashboard auth cookies.
+  # Required for production — sessions won't survive restarts or scale-out without it.
+  # Generate with: openssl rand -hex 32
+  dashboardJwtSecret: ""
+
+# ── Ingress ────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: nginx
+  # Hostname for the EarlyPass API + dashboard.
+  # Example: "waitlist.yourdomain.com"
+  host: ""
+  tls: true
+  # cert-manager ClusterIssuer name.
+  clusterIssuer: letsencrypt-prod
+  annotations: {}
+
+# ── Autoscaling (HPA) — disabled by default ───────────────────────────────
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# ── PodDisruptionBudget ───────────────────────────────────────────────────
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# ── Network Policies ──────────────────────────────────────────────────────
+networkPolicy:
+  enabled: false
+
+# ── Pod annotations / labels ──────────────────────────────────────────────
+podAnnotations: {}
+podLabels: {}
+
+# ── Security context ──────────────────────────────────────────────────────
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL

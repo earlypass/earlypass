@@ -1,0 +1,9 @@
+{{define "title"}}Confirm your spot{{end}}
+{{define "header_text"}}{{.CampaignName}}{{end}}
+{{define "content"}}
+  <p>Hey there! 👋</p>
+  <p>Thanks for joining the <strong>{{.CampaignName}}</strong> waitlist. Click the button below to confirm your email address and secure your spot.</p>
+  <p><a href="{{.VerifyURL}}" class="btn">Confirm your spot →</a></p>
+  <p style="color:#9ca3af;font-size:13px;">This link expires in 48 hours. If you didn't sign up, you can safely ignore this email.</p>
+{{end}}
+{{define "footer_content"}}Sent by EarlyPass &middot; <a href="{{.VerifyURL}}" style="color:{{.AccentColor}};">{{.VerifyURL}}</a>{{end}}

@@ -1,0 +1,19 @@
+{
+  "name": "@earlypass/dashboard",
+  "version": "0.1.0",
+  "description": "EarlyPass campaign dashboard (Preact + htm + TypeScript, built with esbuild)",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "node scripts/build.js --watch"
+  },
+  "dependencies": {
+    "htm": "^3.1.1",
+    "preact": "^10.25.4",
+    "uplot": "^1.6.31"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  },
+  "license": "BUSL-1.1"
+}

@@ -1,0 +1,10 @@
+# oapi-codegen configuration for generating Go types from api/openapi.yaml.
+# Run via: make generate
+package: generated
+generate:
+  models: true
+  chi-server: true
+  strict-server: true
+output: internal/api/generated/api.gen.go
+output-options:
+  skip-prune: false

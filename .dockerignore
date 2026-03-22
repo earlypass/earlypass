@@ -1,0 +1,36 @@
+.git
+bin/
+docker/
+k8s/
+tilt/
+helm/
+tasks/
+.github/
+
+# Node modules (can be huge)
+widget/node_modules/
+dashboard/node_modules/
+
+# Dev/CI tooling not needed by any build stage
+grafana/
+scripts/
+Makefile
+Tiltfile
+mise.toml
+oapi-codegen.yaml
+.golangci.yml
+
+# Docs and repo metadata
+*.md
+LICENSE
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+SECURITY.md
+
+# Widget E2E tests not needed by the widget-builder stage
+widget/tests/
+widget/playwright.config.ts
+
+# Test artifacts
+coverage.out
+coverage.html

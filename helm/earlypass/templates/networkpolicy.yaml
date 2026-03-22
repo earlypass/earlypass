@@ -1,0 +1,50 @@
+{{- if .Values.networkPolicy.enabled -}}
+# Allow ingress to the app from ingress controller and within namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "earlypass.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "earlypass.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "earlypass.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Allow intra-namespace communication
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    # Allow DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow outbound within namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+    # Allow HTTPS to external services (Resend, etc.)
+    - ports:
+        - protocol: TCP
+          port: 443
+{{- end }}

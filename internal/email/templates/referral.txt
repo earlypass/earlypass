@@ -1,0 +1,10 @@
+You moved up! 🚀
+
+Hey {{.FirstName}}! Someone just joined the {{.CampaignName}} waitlist via your referral link.
+
+Total referrals: {{.ReferralCount}}
+Your position right now*: #{{.Position}}
+
+Keep sharing to move even higher: {{.ReferralLink}}
+
+* Your position is live and can change as others refer friends — keep sharing to climb higher.

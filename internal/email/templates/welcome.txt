@@ -1,0 +1,13 @@
+You're in! 🎉
+
+Your email is confirmed. You're officially on the {{.CampaignName}} waitlist.
+
+Your position right now*: #{{.Position}}
+
+Move up faster — share your referral link and every person who joins via your link moves you one spot higher.
+
+Your referral link: {{.ReferralLink}}
+
+Good luck!
+
+* Your position is live and can change as others refer friends — keep sharing to climb higher.

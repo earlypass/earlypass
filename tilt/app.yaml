@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: earlypass
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: earlypass
+  template:
+    metadata:
+      labels:
+        app: earlypass
+    spec:
+      containers:
+        - name: earlypass
+          image: earlypass
+          ports:
+            - containerPort: 3000
+          env:
+            - name: DATABASE_URL
+              value: postgres://earlypass:earlypass@postgres:5432/earlypass?sslmode=disable
+            - name: REDIS_URL
+              value: redis://redis:6379
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: otel-collector:4317
+            - name: DEV_MODE
+              value: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: earlypass
+spec:
+  selector:
+    app: earlypass
+  ports:
+    - port: 3000
+      targetPort: 3000

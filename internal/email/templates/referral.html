@@ -1,0 +1,26 @@
+{{define "title"}}Someone joined via your link{{end}}
+{{define "header_text"}}You moved up! 🚀{{end}}
+{{define "extra_styles"}}
+  .stat-row { display: flex; gap: 16px; margin: 24px 0; }
+  .stat { flex: 1; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; text-align: center; }
+  .stat .number { font-size: 32px; font-weight: 800; color: #059669; }
+  .stat .label { color: #166534; font-size: 13px; margin-top: 4px; }
+{{end}}
+{{define "content"}}
+  <p>Hey <strong>{{.FirstName}}</strong>! Someone just joined the <strong>{{.CampaignName}}</strong> waitlist via your referral link.</p>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="number">{{.ReferralCount}}</div>
+      <div class="label">Total referrals</div>
+    </div>
+    <div class="stat">
+      <div class="number">#{{.Position}}</div>
+      <div class="label">Your position right now*</div>
+    </div>
+  </div>
+
+  <p>Keep sharing to move even higher!</p>
+  <p><a href="{{.ReferralLink}}" class="btn">Share again →</a></p>
+{{end}}
+{{define "footer_content"}}Sent by EarlyPass · * Positions are live and can change — others move up by referring friends, and so can you.{{end}}

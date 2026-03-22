@@ -1,0 +1,14 @@
+{{- if .Values.podDisruptionBudget.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "earlypass.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "earlypass.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "earlypass.selectorLabels" . | nindent 6 }}
+{{- end }}

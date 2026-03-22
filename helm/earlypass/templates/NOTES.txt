@@ -1,0 +1,30 @@
+EarlyPass {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }}.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ NEXT STEPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Database migrations run automatically on startup — no separate migration step needed.
+
+
+{{- if not .Values.ingress.enabled }}
+
+1. Access the app via port-forward:
+
+   kubectl port-forward -n {{ .Release.Namespace }} \
+     svc/{{ include "earlypass.fullname" . }} 3000:{{ .Values.config.port }}
+
+   Then open: http://localhost:3000/dashboard
+{{- else }}
+
+1. Access EarlyPass at: {{ if .Values.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}
+   Dashboard: {{ if .Values.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}/dashboard
+{{- end }}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ DOCS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Self-hosting guide: https://github.com/earlypass/earlypass/blob/main/docs/self-hosting.md
+  API reference:      https://{{ if .Values.ingress.enabled }}{{ .Values.ingress.host }}{{ else }}<your-domain>{{ end }}/docs/api

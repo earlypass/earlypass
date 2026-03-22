@@ -1,0 +1,1346 @@
+openapi: "3.1.0"
+
+info:
+  title: EarlyPass API
+  version: "0.1.0"
+  description: |
+    Drop-in viral waitlist widget API. Manage campaigns, signups,
+    referrals, and analytics programmatically.
+  license:
+    name: Business Source License 1.1
+    url: https://github.com/earlypass/earlypass/blob/main/LICENSE
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://api.earlypass.app
+    description: Production
+
+security:
+  - BearerAuth: []
+
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Health check
+      description: Returns server liveness status.
+      tags:
+        - system
+      security: []
+      responses:
+        "200":
+          description: Server is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/openapi.yaml:
+    get:
+      operationId: getOpenAPISpec
+      summary: Return the OpenAPI specification
+      tags:
+        - system
+      security: []
+      responses:
+        "200":
+          description: OpenAPI specification YAML
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /api/v1/auth/magic-link:
+    post:
+      operationId: requestMagicLink
+      summary: Request a magic sign-in link
+      tags:
+        - auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MagicLinkRequest"
+      responses:
+        "202":
+          description: Magic link sent (or would be sent if email exists)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MagicLinkResponse"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/auth/verify:
+    get:
+      operationId: verifyMagicLink
+      summary: Verify a magic link token
+      tags:
+        - auth
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Token verified — returns account info and API key (REST flow only)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MagicLinkVerifyResponse"
+        "302":
+          description: OAuth flow redirect to client redirect_uri
+          headers:
+            Location:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/accounts/me:
+    get:
+      operationId: getMe
+      summary: Get current account
+      tags:
+        - accounts
+      responses:
+        "200":
+          description: Current account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/accounts/me/api-keys:
+    get:
+      operationId: listAPIKeys
+      summary: List API keys for the current account
+      tags:
+        - accounts
+      responses:
+        "200":
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/APIKeyInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createAPIKey
+      summary: Create a new API key
+      tags:
+        - accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAPIKeyRequest"
+      responses:
+        "201":
+          description: New API key (raw key shown once)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAPIKeyResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/accounts/me/api-keys/{key_id}:
+    delete:
+      operationId: revokeAPIKey
+      summary: Revoke an API key
+      tags:
+        - accounts
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Key revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/accounts/me/campaigns:
+    get:
+      operationId: listMyCampaigns
+      summary: List campaigns owned by the current account
+      tags:
+        - accounts
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of campaigns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/campaigns:
+    post:
+      operationId: createCampaign
+      summary: Create a campaign
+      description: |
+        Creates a new waitlist campaign linked to the authenticated account.
+        Requires a valid account Bearer token.
+      tags:
+        - campaigns
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCampaignRequest"
+      responses:
+        "201":
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/campaigns/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CampaignID"
+    get:
+      operationId: getCampaign
+      summary: Get a campaign
+      tags:
+        - campaigns
+      responses:
+        "200":
+          description: Campaign found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateCampaign
+      summary: Update a campaign
+      tags:
+        - campaigns
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCampaignRequest"
+      responses:
+        "200":
+          description: Campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: deleteCampaign
+      summary: Delete a campaign
+      tags:
+        - campaigns
+      responses:
+        "204":
+          description: Campaign deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/campaigns/{id}/signups:
+    parameters:
+      - $ref: "#/components/parameters/CampaignID"
+    get:
+      operationId: listSignups
+      summary: List signups for a campaign
+      tags:
+        - signups
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of signups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: createSignup
+      summary: Add a signup to a campaign
+      description: |
+        Registers a new email address on the waitlist. Validates the email,
+        runs fraud checks, and optionally credits a referrer.
+
+        Requires the request to originate from the campaign's configured allowed
+        origin (Origin header must match). Also requires a valid X-CSRF-Token
+        obtained from GET /api/v1/campaigns/{id}/csrf-token.
+      tags:
+        - signups
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema:
+            type: string
+          description: |
+            Single-use CSRF token obtained from GET /api/v1/campaigns/{id}/csrf-token.
+            Prevents cross-site request forgery against the signup endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSignupRequest"
+      responses:
+        "201":
+          description: Signup created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Signup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/campaigns/{id}/signups/{signup_id}:
+    parameters:
+      - $ref: "#/components/parameters/CampaignID"
+      - name: signup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getSignup
+      summary: Get a specific signup
+      tags:
+        - signups
+      responses:
+        "200":
+          description: Signup found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Signup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/campaigns/{id}/signups/invite:
+    parameters:
+      - $ref: "#/components/parameters/CampaignID"
+    post:
+      operationId: inviteSignups
+      summary: Invite the top N signups
+      description: |
+        Marks the top N verified signups as invited, ordered by effective queue
+        position ascending (referral leaders first). Sends invite emails
+        asynchronously if an email sender is configured.
+
+        Invite status is idempotent — already-invited signups are excluded from
+        selection, so calling this multiple times is safe.
+      tags:
+        - signups
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteSignupsRequest"
+      responses:
+        "200":
+          description: Invitations sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteSignupsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/campaigns/{id}/leaderboard:
+    parameters:
+      - $ref: "#/components/parameters/CampaignID"
+    get:
+      operationId: getLeaderboard
+      summary: Get the referral leaderboard
+      tags:
+        - leaderboard
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/campaigns/{id}/stats:
+    parameters:
+      - $ref: "#/components/parameters/CampaignID"
+    get:
+      operationId: getCampaignStats
+      summary: Get campaign statistics
+      tags:
+        - stats
+      responses:
+        "200":
+          description: Campaign statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/campaigns/{id}/csrf-token:
+    parameters:
+      - $ref: "#/components/parameters/CampaignID"
+    get:
+      operationId: getCsrfToken
+      summary: Get a CSRF token for a campaign
+      description: |
+        Returns a single-use CSRF token valid for 5 minutes.
+        The widget must include this token in the X-CSRF-Token request header
+        when calling POST /api/v1/campaigns/{id}/signups to prevent
+        cross-site request forgery.
+      tags:
+        - widget
+      security: []
+      responses:
+        "200":
+          description: CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CSRFTokenResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/campaigns/{id}/webhooks:
+    parameters:
+      - $ref: "#/components/parameters/CampaignID"
+    get:
+      operationId: listWebhooks
+      summary: List webhook endpoints for a campaign
+      tags:
+        - webhooks
+      responses:
+        "200":
+          description: List of webhook endpoints
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: createWebhook
+      summary: Create a webhook endpoint
+      tags:
+        - webhooks
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWebhookRequest"
+      responses:
+        "201":
+          description: Webhook endpoint created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpoint"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/campaigns/{id}/webhooks/{wid}:
+    parameters:
+      - $ref: "#/components/parameters/CampaignID"
+      - name: wid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      operationId: deleteWebhook
+      summary: Delete a webhook endpoint
+      tags:
+        - webhooks
+      responses:
+        "204":
+          description: Webhook endpoint deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/invites/{token}:
+    get:
+      operationId: getInviteToken
+      summary: Inspect an invite token
+      description: |
+        Returns invite token details. Status is "active" if not yet redeemed,
+        "redeemed" if already redeemed. Returns 404 if the token does not exist
+        or has expired (>30 days).
+      tags:
+        - invites
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invite token details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteTokenResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/invites/{token}/redeem:
+    post:
+      operationId: redeemInviteToken
+      summary: Redeem an invite token
+      description: |
+        Marks an invite token as redeemed. Idempotent — if already redeemed,
+        returns 200 with the existing redemption data. Returns 404 if the token
+        does not exist or has expired (>30 days).
+      tags:
+        - invites
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Token redeemed (or already was redeemed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteTokenResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/verify/{token}:
+    get:
+      operationId: verifyEmail
+      summary: Verify an email address
+      description: |
+        Verifies the email address associated with the token and redirects
+        to the campaign's success page (or a default page). No authentication required.
+      tags:
+        - signups
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to success page
+          headers:
+            Location:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/w/{slug}:
+    get:
+      operationId: getWidgetData
+      summary: Get widget data for a campaign
+      description: |
+        Public endpoint used by the embedded widget. Returns campaign info,
+        total signup count, and optionally a specific signup's position/referral data.
+      tags:
+        - widget
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: email
+          in: query
+          schema:
+            type: string
+            format: email
+        - name: referral_code
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Widget data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WidgetData"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: EarlyPass API Key
+      description: |
+        Account API key or OAuth access token.
+        Pass it as a Bearer token: `Authorization: Bearer ep_acc_...`
+        Account API keys are created via magic link auth and scoped to an account.
+
+  parameters:
+    CampaignID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Deduplication key for POST/PATCH requests. When provided, the server
+        caches the first successful (2xx) response for 24 hours. Subsequent
+        requests with the same key, method, and path return the cached response
+        with the `Idempotency-Replayed` header set to `true`.
+      schema:
+        type: string
+
+  headers:
+    X-RateLimit-Limit:
+      description: Maximum number of requests allowed per minute
+      schema:
+        type: integer
+        example: 300
+    X-RateLimit-Remaining:
+      description: Number of requests remaining in the current window
+      schema:
+        type: integer
+        example: 299
+    Retry-After:
+      description: Seconds until the next request is allowed (present only on 429 responses)
+      schema:
+        type: integer
+        example: 12
+    Idempotency-Replayed:
+      description: Set to `true` when the response was served from the idempotency cache
+      schema:
+        type: string
+        enum: ["true"]
+
+  responses:
+    BadRequest:
+      description: Invalid request body or parameters
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Not authorized to access this resource
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: Resource already exists
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnprocessableEntity:
+      description: Request is well-formed but semantically invalid (e.g. disposable email)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          $ref: "#/components/headers/X-RateLimit-Limit"
+        X-RateLimit-Remaining:
+          $ref: "#/components/headers/X-RateLimit-Remaining"
+        Retry-After:
+          $ref: "#/components/headers/Retry-After"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    CSRFTokenResponse:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Single-use CSRF token, valid for 5 minutes
+
+    HealthComponentStatus:
+      type: object
+      required:
+        - database
+        - redis
+      properties:
+        database:
+          type: string
+          example: ok
+        redis:
+          type: string
+          example: ok
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - components
+      properties:
+        status:
+          type: string
+          example: ok
+        components:
+          $ref: "#/components/schemas/HealthComponentStatus"
+
+    Problem:
+      type: object
+      description: RFC 7807 Problem Details
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+          example: https://earlypass.dev/errors/not-found
+        title:
+          type: string
+          example: Resource not found
+        status:
+          type: integer
+          example: 404
+        detail:
+          type: string
+          example: Campaign with slug 'my-launch' was not found
+        instance:
+          type: string
+          format: uri
+
+    CampaignSettings:
+      type: object
+      properties:
+        boost_weight:
+          type: number
+          format: double
+          default: 1.0
+          description: How many queue positions each referral is worth
+        product_url:
+          type: string
+          format: uri
+          example: https://example.com/product
+          description: |
+            The URL of the product page. Used as the CTA link in invite emails.
+            Widget API requests are restricted to the origin derived from this URL.
+
+    Campaign:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+        - status
+        - settings
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: My Product Launch
+        slug:
+          type: string
+          example: my-product-launch
+        status:
+          type: string
+          enum: [pending, active, paused, full]
+          example: active
+        settings:
+          $ref: "#/components/schemas/CampaignSettings"
+        max_signups:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateCampaignRequest:
+      type: object
+      required:
+        - name
+        - product_url
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          example: My Product Launch
+        product_url:
+          type: string
+          format: uri
+          example: https://example.com/product
+          description: |
+            The URL of the product page. Widget API requests are restricted to
+            the origin derived from this URL (e.g. https://example.com).
+
+    UpdateCampaignRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        status:
+          type: string
+          enum: [active, paused]
+        settings:
+          $ref: "#/components/schemas/CampaignSettings"
+        max_signups:
+          type: integer
+          nullable: true
+
+    Signup:
+      type: object
+      required:
+        - id
+        - campaign_id
+        - email
+        - referral_code
+        - base_position
+        - effective_position
+        - referral_count
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        email_verified:
+          type: boolean
+        referral_code:
+          type: string
+          example: Ab3Xz9Qr
+        referred_by:
+          type: string
+          format: uuid
+          nullable: true
+        base_position:
+          type: integer
+        effective_position:
+          type: integer
+        referral_count:
+          type: integer
+        status:
+          type: string
+          enum: [pending, verified, rejected, expired, invited]
+        invited_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when the signup is granted access (status becomes invited).
+        invite_token:
+          type: string
+          nullable: true
+          description: Single-use invite token. Present only for invited signups.
+        invite_token_redeemed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the invite token was redeemed, if applicable.
+        created_at:
+          type: string
+          format: date-time
+
+    CreateSignupRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        referral_code:
+          type: string
+          description: Referral code of the person who referred this signup
+        fingerprint:
+          type: string
+          description: Client-supplied fingerprint for fraud analysis
+        metadata:
+          type: object
+          additionalProperties: true
+
+    SignupListResponse:
+      type: object
+      required:
+        - signups
+        - total
+      properties:
+        signups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Signup"
+        total:
+          type: integer
+
+    LeaderboardEntry:
+      type: object
+      required:
+        - rank
+        - referral_code
+        - referral_count
+        - effective_position
+      properties:
+        rank:
+          type: integer
+        referral_code:
+          type: string
+        referral_count:
+          type: integer
+        effective_position:
+          type: integer
+        email_masked:
+          type: string
+          description: Partially masked email (e.g. a***@example.com)
+
+    LeaderboardResponse:
+      type: object
+      required:
+        - entries
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+
+    CampaignStats:
+      type: object
+      required:
+        - total_signups
+        - verified_signups
+        - referral_rate
+        - viral_coefficient
+        - today_signups
+      properties:
+        total_signups:
+          type: integer
+        verified_signups:
+          type: integer
+        referral_rate:
+          type: number
+          format: double
+          description: Fraction of signups who came via referral
+        viral_coefficient:
+          type: number
+          format: double
+          description: Average referrals per signup
+        today_signups:
+          type: integer
+
+    WebhookEndpoint:
+      type: object
+      required:
+        - id
+        - campaign_id
+        - url
+        - events
+        - active
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - signup.created
+              - referral.converted
+              - email.verified
+              - signup.invited
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    CreateWebhookRequest:
+      type: object
+      required:
+        - url
+        - events
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - signup.created
+              - referral.converted
+              - email.verified
+              - signup.invited
+        secret:
+          type: string
+          description: Optional signing secret for HMAC verification
+
+    InviteSignupsRequest:
+      type: object
+      required:
+        - count
+      properties:
+        count:
+          type: integer
+          minimum: 1
+          maximum: 10000
+          description: Number of top-ranked verified signups to invite.
+
+    InviteSignupsResponse:
+      type: object
+      required:
+        - invited
+        - total_invited
+      properties:
+        invited:
+          type: integer
+          description: Number of signups newly marked as invited in this call.
+        total_invited:
+          type: integer
+          description: Cumulative total of invited signups for the campaign.
+
+    WebhookListResponse:
+      type: object
+      required:
+        - endpoints
+      properties:
+        endpoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebhookEndpoint"
+
+    MagicLinkRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+
+    MagicLinkResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    MagicLinkVerifyResponse:
+      type: object
+      properties:
+        account:
+          $ref: "#/components/schemas/Account"
+        api_key:
+          type: string
+        note:
+          type: string
+
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    APIKeyInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateAPIKeyRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+    CreateAPIKeyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        api_key:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CampaignList:
+      type: object
+      properties:
+        campaigns:
+          type: array
+          items:
+            $ref: "#/components/schemas/Campaign"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    InviteTokenResponse:
+      type: object
+      required:
+        - signup_id
+        - campaign_id
+        - email
+        - invited_at
+        - status
+      properties:
+        signup_id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        invited_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, redeemed]
+        redeemed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    WidgetData:
+      type: object
+      required:
+        - campaign_id
+        - campaign_name
+        - slug
+        - total_signups
+      properties:
+        campaign_id:
+          type: string
+          format: uuid
+        campaign_name:
+          type: string
+        slug:
+          type: string
+        total_signups:
+          type: integer
+        signup:
+          description: Present when email param matches a signup
+          allOf:
+            - $ref: "#/components/schemas/Signup"

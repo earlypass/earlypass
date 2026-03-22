@@ -1,0 +1,54 @@
+# golangci-lint v2 configuration for EarlyPass.
+# Run via: go tool golangci-lint run
+
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - gosec
+    - revive
+    - exhaustive
+    - noctx
+    - wrapcheck
+
+linters-settings:
+  exhaustive:
+    default-signifies-exhaustive: true
+  wrapcheck:
+    ignorePackageGlobs:
+      - "github.com/earlypass/earlypass/*"
+  revive:
+    rules:
+      - name: exported
+        # Require comments on exported identifiers. Interface implementations
+        # in the postgres package are excluded via issues.exclude-rules below.
+      - name: var-naming
+        disabled: true
+      - name: indent-error-flow
+      - name: error-return
+      - name: error-strings
+      - name: if-return
+      - name: increment-decrement
+
+issues:
+  exclude-rules:
+    # Generated code does not need to follow all lint rules.
+    - path: "internal/api/generated/"
+      linters:
+        - errcheck
+        - wrapcheck
+        - revive
+        - gosec
+    # Store implementations are documented via the store.go interface definitions;
+    # skip the exported-comment rule for concrete method implementations.
+    - path: "internal/store/postgres"
+      text: "exported: exported method"
+      linters:
+        - revive
+    # "api" is an idiomatic Go package name; revive var-naming disagrees but is wrong here.
+    - text: "avoid meaningless package names"
+      linters:
+        - revive

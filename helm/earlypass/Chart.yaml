@@ -1,0 +1,19 @@
+apiVersion: v2
+name: earlypass
+description: |
+  Drop-in viral waitlist widget — self-hosting chart.
+  Deploys the EarlyPass application. Bring your own PostgreSQL and Redis.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - waitlist
+  - referral
+  - viral
+  - saas
+home: https://github.com/earlypass/earlypass
+sources:
+  - https://github.com/earlypass/earlypass
+maintainers:
+  - name: acroca
+    url: https://github.com/acroca
