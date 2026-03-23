@@ -1168,7 +1168,7 @@ function AccountHome() {
 
   return html`
     <div class="header">
-      <span class="header-logo">EarlyPass</span>
+      <img class="header-logo" src="/assets/logo.svg" alt="EarlyPass">
       <form method="POST" action="/dashboard/logout" style="margin-left:auto">
         <button class="btn btn-secondary btn-sm" type="submit">Sign out</button>
       </form>
@@ -1316,7 +1316,7 @@ function App() {
 
   return html`
     <div class="header">
-      <a href="/dashboard/" style="font-weight:700;font-size:16px;color:var(--primary);text-decoration:none">EarlyPass</a>
+      <a href="/dashboard/" style="display:block;height:28px;text-decoration:none"><img src="/assets/logo.svg" alt="EarlyPass" height="28"></a>
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
         ${campaigns.length > 1 ? html`
           <select

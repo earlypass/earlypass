@@ -31,6 +31,7 @@ import (
 	"github.com/earlypass/earlypass/internal/pages"
 	"github.com/earlypass/earlypass/internal/redisstore"
 	"github.com/earlypass/earlypass/internal/store"
+	"github.com/earlypass/earlypass/assets"
 	widget "github.com/earlypass/earlypass/widget"
 	mcpgoserver "github.com/mark3labs/mcp-go/server"
 )
@@ -170,6 +171,16 @@ func NewRouter(deps Dependencies) http.Handler {
 	})
 	r.Get(versionedPath, func(w http.ResponseWriter, r *http.Request) {
 		serveWidget(w, r, "public, max-age=31536000, immutable")
+	})
+
+	// Brand assets — served at /assets/* with a 1-day cache TTL.
+	// Files are embedded at the root of assets.FS (logo.svg, logo.png).
+	assetsServer := http.StripPrefix("/assets/", withCacheControl(http.FileServer(http.FS(assets.FS)), "public, max-age=86400"))
+	r.Get("/assets/*", assetsServer.ServeHTTP)
+
+	// Favicon — redirect to the PNG logo.
+	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/assets/logo.png", http.StatusMovedPermanently)
 	})
 
 	// Email verification success page — redirect target for GET /v1/verify/{token}.
@@ -445,6 +456,14 @@ func (a redisPingerAdapter) Ping(ctx context.Context) error {
 		return fmt.Errorf("redis ping: %w", err)
 	}
 	return nil
+}
+
+// withCacheControl wraps h and sets the Cache-Control header on every response.
+func withCacheControl(h http.Handler, value string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", value)
+		h.ServeHTTP(w, r)
+	})
 }
 
 // compile-time checks.

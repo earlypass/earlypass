@@ -411,7 +411,7 @@ var authorizeFormTmpl = template.Must(template.New("authorize").Parse(`<!DOCTYPE
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
   .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.1); padding: 48px 40px; max-width: 400px; width: 100%; }
-  .logo { font-size: 24px; font-weight: 700; color: #6366f1; margin-bottom: 8px; }
+  .logo { display: block; height: 32px; margin-bottom: 8px; }
   h1 { font-size: 20px; font-weight: 600; color: #111827; margin: 0 0 8px; }
   p { color: #6b7280; font-size: 14px; margin: 0 0 24px; }
   label { display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 6px; }
@@ -423,7 +423,7 @@ var authorizeFormTmpl = template.Must(template.New("authorize").Parse(`<!DOCTYPE
 </head>
 <body>
 <div class="card">
-  <div class="logo">EarlyPass</div>
+  <img class="logo" src="/assets/logo.svg" alt="EarlyPass" height="32">
   <h1>Sign in</h1>
   <p>Enter your email to receive a sign-in link. No password required.</p>
   <form method="POST" action="/oauth/authorize">
@@ -452,14 +452,14 @@ var checkInboxTmpl = template.Must(template.New("check-inbox").Parse(`<!DOCTYPE 
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
   .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.1); padding: 48px 40px; max-width: 400px; width: 100%; text-align: center; }
   .icon { font-size: 48px; margin-bottom: 16px; }
-  .logo { font-size: 20px; font-weight: 700; color: #6366f1; margin-bottom: 16px; }
+  .logo { display: block; height: 28px; margin-bottom: 16px; }
   h1 { font-size: 20px; font-weight: 600; color: #111827; margin: 0 0 8px; }
   p { color: #6b7280; font-size: 14px; margin: 0; line-height: 1.6; }
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="logo">EarlyPass</div>
+  <img class="logo" src="/assets/logo.svg" alt="EarlyPass" height="28" style="margin:0 auto 16px;">
   <div class="icon">&#128231;</div>
   <h1>Check your inbox</h1>
   <p>We sent a sign-in link to your email address.<br>Click the link in the email to continue.<br><br>The link expires in 15 minutes.</p>

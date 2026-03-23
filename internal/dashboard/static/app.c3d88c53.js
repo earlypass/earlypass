@@ -586,7 +586,7 @@ var $a=Object.defineProperty,ka=Object.defineProperties;var Ca=Object.getOwnProp
     </div>
   `}function Ju(){let{data:e,loading:t,error:n}=pt(()=>as.listCampaigns(),[]),[l,s]=X(""),[o,a]=X(""),[p,h]=X(!1),[u,_]=X(!1),[f,g]=X(null);async function y(k){k.preventDefault(),h(!0),g(null);try{let b=await as.createCampaign(l.trim(),o.trim());window.location.href=`/dashboard/${b.slug}/`}catch(b){g({type:"error",text:b.message}),h(!1)}}let S=k=>({active:"badge-success",paused:"badge-warning"})[k]||"badge-muted",A=!t&&!n&&e&&e.length>0,E=!t&&!n&&e&&e.length===0;return $`
     <div class="header">
-      <span class="header-logo">EarlyPass</span>
+      <img class="header-logo" src="/assets/logo.svg" alt="EarlyPass">
       <form method="POST" action="/dashboard/logout" style="margin-left:auto">
         <button class="btn btn-secondary btn-sm" type="submit">Sign out</button>
       </form>
@@ -692,7 +692,7 @@ var $a=Object.defineProperty,ka=Object.defineProperties;var Ca=Object.getOwnProp
     </div>
   `}var rs=[{id:"overview",label:"\u{1F4CA} Overview",Component:Hu},{id:"setup",label:"\u{1F680} Setup",Component:qu},{id:"signups",label:"\u{1F465} Signups",Component:Ou},{id:"leaderboard",label:"\u{1F3C6} Leaderboard",Component:Fu},{id:"invitations",label:"\u{1F4EC} Invitations",Component:Uu},{id:"webhooks",label:"\u{1F517} Webhooks",Component:Vu},{id:"settings",label:"\u2699\uFE0F Settings",Component:Gu}];function Zu(){let e=()=>window.location.hash.slice(1)||"overview",[t,n]=X(e),[l,s]=X(""),[o,a]=X([]);fl(()=>{window.location.hash==="#access"&&window.location.replace("#invitations"),Te.getSettings().then(h=>s(h.name||$e)).catch(()=>{}),as.listCampaigns().then(h=>a(h)).catch(()=>{})},[]),fl(()=>{let h=()=>n(e());return window.addEventListener("hashchange",h),()=>window.removeEventListener("hashchange",h)},[]);let p=rs.find(h=>h.id===t)||rs[0];return $`
     <div class="header">
-      <a href="/dashboard/" style="font-weight:700;font-size:16px;color:var(--primary);text-decoration:none">EarlyPass</a>
+      <a href="/dashboard/" style="display:block;height:28px;text-decoration:none"><img src="/assets/logo.svg" alt="EarlyPass" height="28"></a>
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
         ${o.length>1?$`
           <select
