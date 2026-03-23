@@ -5,6 +5,7 @@
 // Production build: app.js is renamed to app.{sha256-8}.js and index.html is
 // updated to reference the hashed filename, enabling immutable caching.
 // Watch/dev build: plain app.js is used (no hash, no caching complications).
+// Dev build (--dev): same as watch but exits after one build. Used by Dockerfile.dev.
 
 const crypto = require("crypto");
 const esbuild = require("esbuild");
@@ -12,6 +13,7 @@ const fs = require("fs");
 const path = require("path");
 
 const watch = process.argv.includes("--watch");
+const dev = process.argv.includes("--dev");
 
 const outDir = path.join(
   __dirname,
@@ -28,7 +30,7 @@ fs.copyFileSync(
   path.join(__dirname, "..", "src", "vendor", "uPlot.min.css"),
   path.join(outDir, "vendor", "uPlot.min.css")
 );
-// index.html is copied here for watch mode; prod build rewrites it after hashing.
+// index.html is copied here for watch/dev mode; prod build rewrites it after hashing.
 fs.copyFileSync(
   path.join(__dirname, "..", "src", "index.html"),
   path.join(outDir, "index.html")
@@ -40,13 +42,16 @@ const buildOptions = {
   outfile: path.join(outDir, "app.js"),
   format: "esm",
   target: ["es2017"],
-  minify: !watch,
-  sourcemap: watch ? "inline" : false,
+  minify: !watch && !dev,
+  sourcemap: (watch || dev) ? "inline" : false,
   logLevel: "info",
 };
 
 if (watch) {
   esbuild.context(buildOptions).then((ctx) => ctx.watch());
+} else if (dev) {
+  // One-shot dev build: inline source maps, no minification, no hashing.
+  esbuild.build(buildOptions).catch(() => process.exit(1));
 } else {
   esbuild.build(buildOptions).then(() => {
     // Compute SHA-256 of the bundle and use first 8 hex chars as the cache key.

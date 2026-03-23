@@ -2,7 +2,7 @@
 # All targets work without any extra setup — Go is managed via mise.
 # mise sets up PATH automatically so `go` resolves correctly.
 
-.PHONY: build build-widget build-dashboard test test-integration vet lint check \
+.PHONY: build build-widget build-dashboard build-dashboard-dev test test-integration vet lint check \
         generate migrate migrate-down migrate-reset dev cluster-up clean
 
 MISE := $(shell which mise 2>/dev/null || echo /home/node/.local/bin/mise)
@@ -19,9 +19,13 @@ build: build-widget build-dashboard
 build-widget:
 	cd widget && npm ci && npm run build
 
-## build-dashboard: Build the dashboard SPA via esbuild.
+## build-dashboard: Build the dashboard SPA via esbuild (production, hashed, no source maps).
 build-dashboard:
 	cd dashboard && npm ci && npm run build
+
+## build-dashboard-dev: Build the dashboard SPA with inline source maps (dev only, no hashing).
+build-dashboard-dev:
+	cd dashboard && npm ci && node scripts/build.js --dev
 
 ## test: Run unit tests.
 test:

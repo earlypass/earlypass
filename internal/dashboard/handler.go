@@ -73,7 +73,8 @@ const authPageCSS = `
   }
   body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
   .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; height: 56px; }
-  .logo { display: block; height: 28px; text-decoration: none; }
+  .logo { display: flex; align-items: center; gap: 8px; height: 28px; text-decoration: none; }
+  .logo-text { font-weight: 700; font-size: 16px; color: var(--primary); }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; width: 100%; max-width: 400px; margin: 80px auto; }
   h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
   .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
@@ -95,7 +96,7 @@ const loginHTML = `<!DOCTYPE html>
 <style>` + authPageCSS + `</style>
 </head>
 <body>
-<div class="header"><a class="logo" href="/"><img src="/assets/logo.svg" alt="EarlyPass" height="28"></a></div>
+<div class="header"><a class="logo" href="/"><img src="/assets/logo.svg" alt="" height="28"><span class="logo-text">EarlyPass</span></a></div>
 <div class="card">
   <h1>Sign in to EarlyPass</h1>
   <p class="subtitle">Enter your email and we'll send you a magic sign-in link. No password required.</p>
@@ -115,7 +116,7 @@ const checkInboxHTML = `<!DOCTYPE html>
 <style>` + authPageCSS + `</style>
 </head>
 <body>
-<div class="header"><a class="logo" href="/"><img src="/assets/logo.svg" alt="EarlyPass" height="28"></a></div>
+<div class="header"><a class="logo" href="/"><img src="/assets/logo.svg" alt="" height="28"><span class="logo-text">EarlyPass</span></a></div>
 <div class="card" style="text-align:center">
   <div class="icon">📬</div>
   <h1>Check your inbox</h1>

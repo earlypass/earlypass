@@ -1,4 +1,4 @@
-import { render } from 'preact';
+import { render, Fragment } from 'preact';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks';
 import { html } from 'htm/preact';
 import uPlot from 'uplot';
@@ -1166,9 +1166,9 @@ function AccountHome() {
   const hasCampaigns = !loading && !error && campaigns && campaigns.length > 0;
   const isFirstCampaign = !loading && !error && campaigns && campaigns.length === 0;
 
-  return html`
+  return html`<${Fragment}>
     <div class="header">
-      <a href="/dashboard/" style="display:flex;align-items:center;gap:8px;text-decoration:none"><img src="/assets/logo.svg" alt="EarlyPass" height="28"><span style="font-weight:700;font-size:16px;color:var(--primary)">EarlyPass</span></a>
+      <a href="/dashboard/" style="display:flex;align-items:center;gap:8px;text-decoration:none"><img src="/assets/logo.svg" alt="EarlyPass" class="header-logo" /><span style="font-weight:700;font-size:16px;color:var(--primary)">EarlyPass</span></a>
       <form method="POST" action="/dashboard/logout" style="margin-left:auto">
         <button class="btn btn-secondary btn-sm" type="submit">Sign out</button>
       </form>
@@ -1276,7 +1276,7 @@ function AccountHome() {
         `
       }
     </div>
-  `;
+  </${Fragment}>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -1314,9 +1314,9 @@ function App() {
 
   const page = PAGES.find(p => p.id === activePage) || PAGES[0];
 
-  return html`
+  return html`<${Fragment}>
     <div class="header">
-      <a href="/dashboard/" style="display:flex;align-items:center;gap:8px;text-decoration:none"><img src="/assets/logo.svg" alt="EarlyPass" height="28"><span style="font-weight:700;font-size:16px;color:var(--primary)">EarlyPass</span></a>
+      <a href="/dashboard/" style="display:flex;align-items:center;gap:8px;text-decoration:none"><img src="/assets/logo.svg" alt="EarlyPass" class="header-logo" /><span style="font-weight:700;font-size:16px;color:var(--primary)">EarlyPass</span></a>
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
         ${campaigns.length > 1 ? html`
           <select
@@ -1354,7 +1354,7 @@ function App() {
         <${page.Component} />
       </main>
     </div>
-  `;
+  </${Fragment}>`;
 }
 
 render(

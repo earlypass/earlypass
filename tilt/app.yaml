@@ -26,6 +26,8 @@ spec:
               value: otel-collector:4317
             - name: DEV_MODE
               value: "true"
+            - name: DASHBOARD_JWT_SECRET
+              value: "dev-only-insecure-jwt-secret-do-not-use-in-production"
 ---
 apiVersion: v1
 kind: Service
