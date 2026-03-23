@@ -1,5 +1,7 @@
 # EarlyPass
 
+<img src="assets/logo.svg" alt="EarlyPass" width="120" />
+
 > Drop-in viral waitlist widget with referral mechanics, leaderboard, and analytics.
 
 Add a viral waitlist to any site in 5 minutes. Referral tracking, milestone rewards, leaderboard, analytics, and access granting — built API-first so human founders and AI agents can manage campaigns programmatically.
