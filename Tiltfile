@@ -41,3 +41,11 @@ k8s_resource('earlypass',
     port_forwards=['3000:3000'],
     resource_deps=['postgres', 'redis', 'migrations'],
     labels=['app'])
+
+# Widget testbed — Python script queries postgres and renders a page per campaign
+docker_build('widget-testbed', 'tilt', dockerfile='tilt/Dockerfile.widget-testbed')
+k8s_yaml('tilt/widget-testbed.yaml')
+k8s_resource('widget-testbed',
+    port_forwards=['4000:4000'],
+    resource_deps=['migrations'],
+    labels=['app'])
