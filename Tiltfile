@@ -1,4 +1,4 @@
-allow_k8s_contexts('kind-kind')
+allow_k8s_contexts('kind-earlypass-dev')
 
 # metrics-server (required for kubectl top / k9s memory+CPU display)
 local_resource(

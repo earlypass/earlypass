@@ -65,7 +65,7 @@ cluster-up:
 
 ## dev: Start the full local stack in Kubernetes via Tilt.
 dev:
-	tilt up
+	tilt up --context kind-earlypass-dev
 
 ## clean: Remove build artifacts.
 clean:

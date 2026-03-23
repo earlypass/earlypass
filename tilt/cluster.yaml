@@ -7,6 +7,6 @@ env:
 ---
 apiVersion: ctlptl.dev/v1alpha1
 kind: Cluster
-name: kind-kind
+name: kind-earlypass-dev
 product: kind
 registry: ctlptl-registry
