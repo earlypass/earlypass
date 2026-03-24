@@ -41,24 +41,25 @@ If you change the project structure, add a new env var, add a new make target, o
 
 ## Key Commands
 
-### One-time dev environment setup (Kind + Tilt)
+### Prerequisites
 
-Prerequisites: `kind`, `ctlptl`, `tilt`, `kubectl`, `helm` installed:
+Docker Desktop installed:
 ```bash
-brew install kind tilt-dev/tap/ctlptl tilt helm kubectl
-```
-
-```bash
-make cluster-up     # ctlptl apply -f tilt/cluster.yaml — creates Kind cluster + local registry (run once)
+brew install --cask docker
 ```
 
 ### Daily dev workflow
 
 ```bash
-make dev            # tilt up — starts all services in k8s
-                    # Tilt UI: http://localhost:10350
-                    # API:     http://localhost:3000
-                    # Jaeger:  http://localhost:16686
+make dev            # postgres + redis + migrate + air (lightweight)
+                    # API: http://localhost:3000
+make dev-full       # all services (o11y + widget testbed) + migrate + air
+                    # Jaeger:         http://localhost:16686
+                    # Grafana:        http://localhost:3001
+                    # Prometheus:     http://localhost:9090
+                    # Widget testbed: http://localhost:4000
+make dev-down       # stop all containers
+make dev-reset      # stop + wipe all volumes (fresh DB)
 ```
 
 ### Other commands
@@ -123,13 +124,13 @@ earlypass/
 ├── dashboard/           # Preact + htm dashboard (embedded in binary)
 ├── helm/
 │   └── earlypass/       # Self-hosting Helm chart (published to oci://ghcr.io/earlypass/charts/earlypass)
-├── tilt/                # All dev environment files (used by Tilt — not for production)
-│   ├── cluster.yaml     # Kind cluster + local registry config
-│   ├── Dockerfile.dev   # Dev image
-│   ├── app.yaml         # App deployment manifest
-│   ├── postgres.yaml, redis.yaml, jaeger.yaml, ...  # Infra manifests
+├── dev/                 # Dev infrastructure configs (mounted by docker-compose.dev.yml)
+│   ├── otel-collector.yaml, prometheus.yml, prometheus-rules/
+│   ├── grafana/         # Datasources, dashboard provider, dashboard JSON
+│   ├── widget-testbed.py, Dockerfile.widget-testbed  # Widget embed testing
+├── docker-compose.dev.yml  # Dev infrastructure (postgres, redis, observability)
+├── .air.toml            # Hot-reload config for air
 ├── Dockerfile           # Multi-stage production Dockerfile (distroless, < 30MB)
-├── Tiltfile             # Tilt dev environment definition
 ├── scripts/             # generate.sh (oapi-codegen runner), gh (GitHub CLI wrapper), git (git wrapper)
 ├── mise.toml            # Tool versions (Go 1.26, Node 22)
 ├── CLAUDE.md            # This file

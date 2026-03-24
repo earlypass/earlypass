@@ -1,0 +1,111 @@
+# docker-compose.dev.yml
+# Dev infrastructure — app runs on host via air, not in a container.
+#
+# Profiles:
+#   (none)    — postgres + redis + widget testbed (default, lightweight)
+#   o11y      — adds jaeger, otel-collector, prometheus, grafana
+#
+# Makefile targets:
+#   make dev           — lightweight (postgres + redis) + migrate + air
+#   make dev-full      — all services (o11y + testbed) + migrate + air
+#   make dev-down      — stop all containers
+#   make dev-reset     — stop + wipe all volumes (fresh DB)
+
+services:
+  # ── Database ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: earlypass
+      POSTGRES_USER: earlypass
+      POSTGRES_PASSWORD: earlypass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U earlypass -d earlypass"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+  # ── Cache ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+  # ── Observability (profile: o11y) ─────────────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.65.0
+    profiles: [o11y]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    profiles: [o11y]
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./dev/otel-collector.yaml:/etc/otel/config.yaml:ro
+    depends_on:
+      - jaeger
+
+  prometheus:
+    image: prom/prometheus:v3.4.0
+    profiles: [o11y]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./dev/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./dev/prometheus-rules:/etc/prometheus/rules:ro
+    depends_on:
+      - otel-collector
+
+  grafana:
+    image: grafana/grafana:11.6.1
+    profiles: [o11y]
+    environment:
+      GF_SERVER_HTTP_PORT: "3001"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./dev/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./dev/grafana/dashboards/provider.yaml:/etc/grafana/provisioning/dashboards/provider.yaml:ro
+      - ./dev/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  # ── Widget testbed ────────────────────────────────────────────────────────
+  widget-testbed:
+    build:
+      context: dev
+      dockerfile: Dockerfile.widget-testbed
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgres://earlypass:earlypass@postgres:5432/earlypass?sslmode=disable
+      API_URL: http://localhost:3000
+      TESTBED_PORT: "4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,35 @@
+groups:
+  - name: earlypass
+    rules:
+      - alert: EmailFailureRateHigh
+        expr: |
+          rate(earlypass_email_sent_total{status="failed"}[5m])
+          /
+          rate(earlypass_email_sent_total[5m]) > 0.05
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Email failure rate > 5%"
+
+      - alert: WebhookFailureRateHigh
+        expr: |
+          rate(earlypass_webhook_deliveries_total{status="failed"}[5m])
+          /
+          rate(earlypass_webhook_deliveries_total[5m]) > 0.10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook failure rate > 10%"
+
+      - alert: HTTPErrorRateHigh
+        expr: |
+          rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m])
+          /
+          rate(http_server_request_duration_seconds_count[5m]) > 0.01
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP 5xx error rate > 1%"

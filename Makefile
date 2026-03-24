@@ -3,7 +3,7 @@
 # mise sets up PATH automatically so `go` resolves correctly.
 
 .PHONY: build build-widget build-dashboard build-dashboard-dev test test-integration vet lint check \
-        generate migrate migrate-down migrate-reset dev cluster-up clean
+        generate migrate migrate-down migrate-reset dev dev-full dev-down dev-reset clean
 
 MISE := $(shell which mise 2>/dev/null || echo /home/node/.local/bin/mise)
 export PATH := $(shell $(MISE) bin-paths 2>/dev/null | tr '\n' ':')$(PATH)
@@ -63,13 +63,21 @@ migrate-reset:
 	go tool goose -dir migrations postgres "$(DATABASE_URL)" reset
 	go tool goose -dir migrations postgres "$(DATABASE_URL)" up
 
-## cluster-up: Create the Kind cluster + local registry via ctlptl (run once before tilt up).
-cluster-up:
-	ctlptl apply -f tilt/cluster.yaml
-
-## dev: Start the full local stack in Kubernetes via Tilt.
+## dev: Start postgres + redis, run migrations, and launch the app with hot-reload (air).
 dev:
-	tilt up --context kind-earlypass-dev
+	docker compose -f docker-compose.dev.yml up -d && $(MAKE) migrate && air
+
+## dev-full: Start all services (including o11y), run migrations, and launch air.
+dev-full:
+	docker compose -f docker-compose.dev.yml --profile o11y up -d && $(MAKE) migrate && OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317 air
+
+## dev-down: Stop all dev containers (including profiled services).
+dev-down:
+	docker compose -f docker-compose.dev.yml --profile o11y down
+
+## dev-reset: Stop all dev containers and wipe volumes (fresh DB).
+dev-reset:
+	docker compose -f docker-compose.dev.yml --profile o11y down -v
 
 ## clean: Remove build artifacts.
 clean:
