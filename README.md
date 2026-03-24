@@ -14,15 +14,30 @@ Add a viral waitlist to any site in 5 minutes. Referral tracking, milestone rewa
 
 ## Quick Start (Self-Hosted)
 
-**Kubernetes (recommended):**
+**Docker Compose (recommended):**
+```bash
+curl -O https://www.earlypass.app/docker-compose.yml
+export DASHBOARD_JWT_SECRET=$(openssl rand -hex 32)
+docker compose up -d
+```
+
+**Single container** (bring your own Postgres + Redis):
+```bash
+docker run -d -p 3000:3000 \
+  -e DATABASE_URL="postgres://user:pass@host:5432/earlypass" \
+  -e REDIS_URL="redis://host:6379" \
+  -e DASHBOARD_JWT_SECRET="$(openssl rand -hex 32)" \
+  ghcr.io/earlypass/earlypass:latest
+```
+
+**Kubernetes (Helm):**
 ```bash
 helm install earlypass oci://ghcr.io/earlypass/charts/earlypass \
-  --version 0.1.0 \
   --set secrets.databaseUrl="postgres://..." \
   --set secrets.dashboardJwtSecret="$(openssl rand -hex 32)"
 ```
 
-See the [self-hosting guide](https://www.earlypass.app/docs/getting-started) for full setup instructions.
+See the [self-hosting guide](https://www.earlypass.app/docs/self-hosting) for full setup instructions.
 
 ## Embed the Widget
 
@@ -179,7 +194,7 @@ curl localhost:3000/healthz
 | Widget | Vanilla TypeScript, esbuild IIFE, Shadow DOM, < 20KB gzipped |
 | Dashboard | Preact + htm (no build step), embedded in Go binary |
 | MCP server | mark3labs/mcp-go (stdio + SSE/streamable HTTP) |
-| Deployment | Kubernetes via Helm chart |
+| Deployment | Docker / Docker Compose / Kubernetes (Helm chart) |
 
 ## Documentation
 
