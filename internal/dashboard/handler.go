@@ -148,6 +148,23 @@ const checkInboxHTML = `<!DOCTYPE html>
 </div>
 </body></html>`
 
+const closedModeErrorHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Account not found – EarlyPass</title>
+<style>` + authPageCSS + `</style>
+</head>
+<body>
+<div class="header"><a class="logo" href="/"><img src="/assets/logo.svg" alt="" height="28"><span class="logo-text">EarlyPass</span></a></div>
+<div class="card" style="text-align:center">
+  <div class="icon">🚫</div>
+  <h1>Account not found</h1>
+  <p class="subtitle" style="margin-top:12px">This instance is invite-only and no account was found for that email address. Please use the email you were invited with.</p>
+  <p class="note" style="margin-top:24px"><a href="/dashboard/login">← Try a different email</a></p>
+</div>
+</body></html>`
+
 // LoginGET handles GET /dashboard/login — renders the email input form.
 // Redirects already-authenticated users to the dashboard.
 func (d *Dashboard) LoginGET(w http.ResponseWriter, r *http.Request) {
@@ -184,12 +201,12 @@ func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// In closed mode, only send magic links to existing accounts.
-	// Always show the check-inbox page regardless — no user enumeration.
 	if d.SignupModeClosed {
 		if _, err := d.AccountStore.GetByEmail(r.Context(), emailAddr); err != nil {
 			d.Logger.InfoContext(r.Context(), "closed mode: dashboard login for unknown email", slog.String("email", emailAddr))
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = w.Write([]byte(checkInboxHTML))
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(closedModeErrorHTML))
 			return
 		}
 	}
@@ -1017,7 +1034,7 @@ func (d *Dashboard) InviteTopN(w http.ResponseWriter, r *http.Request) {
 	if d.EmailOutbox != nil && len(invited) > 0 {
 		subject := "You're in — " + campaign.Name + " early access"
 		for _, sg := range invited {
-			inviteLink := dashboardBuildInviteLink(campaign.Settings.ProductURL, sg.InviteToken)
+			inviteLink := dashboardBuildInviteLink(campaign.Settings.InviteLinkBase(), sg.InviteToken)
 			htmlBody, textBody, renderErr := email.InviteEmail(campaign.Name, campaign.Settings.ProductURL, inviteLink)
 			if renderErr != nil {
 				d.Logger.ErrorContext(r.Context(), "rendering invite email template",

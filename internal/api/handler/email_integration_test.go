@@ -258,3 +258,80 @@ func TestEmail_InviteTopN(t *testing.T) {
 		}
 	}
 }
+
+// TestEmail_InviteUsesInviteURL verifies that when a campaign has invite_url set,
+// the invite email links use invite_url (not product_url) as the base.
+func TestEmail_InviteUsesInviteURL(t *testing.T) {
+	ts := newTestServer(t)
+	accountKey, _, campaignID := createCampaignWithAuth(t, ts, uniqueName("InviteURL Email"))
+	auth := map[string]string{"Authorization": "Bearer " + accountKey}
+
+	// Set product_url and invite_url on the campaign.
+	productURL := "https://product.example.com"
+	inviteURL := "https://redeem.example.com/invite"
+	resp := ts.do(t, http.MethodPatch, "/api/v1/campaigns/"+campaignID,
+		map[string]any{
+			"settings": map[string]any{
+				"product_url": productURL,
+				"invite_url":  inviteURL,
+			},
+		}, auth)
+	discard(resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PATCH campaign: want 200, got %d", resp.StatusCode)
+	}
+
+	// Create and verify a signup.
+	emailAddr := "invite-url-test@example.com"
+	resp = ts.doSignup(t, campaignID, map[string]any{"email": emailAddr}, nil)
+	discard(resp)
+	token := ts.verificationToken(t, campaignID, emailAddr)
+	resp = ts.do(t, http.MethodGet, "/api/v1/verify/"+token, nil, nil)
+	discard(resp)
+
+	// Flush setup emails (verification + welcome).
+	ts.emails.WaitForCount(2, 2*time.Second)
+	ts.emails.Reset()
+
+	// Invite the signup.
+	resp = ts.do(t, http.MethodPost, "/api/v1/campaigns/"+campaignID+"/signups/invite",
+		map[string]any{"count": 1}, auth)
+	discard(resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("invite: want 200, got %d", resp.StatusCode)
+	}
+
+	if !ts.emails.WaitForCount(1, 2*time.Second) {
+		t.Fatalf("want 1 invite email within 2s, got %d", len(ts.emails.Sent()))
+	}
+
+	sent := ts.emails.Sent()
+	e := sent[0]
+
+	// The invite link in the email must use invite_url as the base, not product_url.
+	if !strings.Contains(e.HTML, inviteURL) {
+		t.Errorf("invite email HTML should contain invite_url %q, got:\n%s", inviteURL, e.HTML)
+	}
+	if strings.Contains(e.HTML, productURL+"?invite=") {
+		t.Errorf("invite email HTML should NOT use product_url as invite link base")
+	}
+
+	// The plain-text body should also use invite_url.
+	if !strings.Contains(e.Text, inviteURL) {
+		t.Errorf("invite email text should contain invite_url %q", inviteURL)
+	}
+
+	// Parse the link and verify the invite query param is present.
+	for _, line := range strings.Split(e.Text, "\n") {
+		if strings.HasPrefix(line, inviteURL) {
+			parsed, err := url.Parse(strings.TrimSpace(line))
+			if err != nil {
+				t.Fatalf("parsing invite link: %v", err)
+			}
+			if parsed.Query().Get("invite") == "" {
+				t.Errorf("invite link missing ?invite= token: %s", line)
+			}
+			break
+		}
+	}
+}
