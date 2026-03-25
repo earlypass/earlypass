@@ -2746,7 +2746,7 @@ function uPlot(opts, data, then) {
         }, false);
       }
     }
-    for (var key2 in legendCols) {
+    for (var _ in legendCols) {
       let v3 = placeTag("td", LEGEND_VALUE, row);
       v3.textContent = "--";
       cells.push(v3);
