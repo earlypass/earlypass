@@ -79,14 +79,14 @@ func SetCookie(w http.ResponseWriter, tokenStr string, secure bool) {
 }
 
 // ClearCookie removes the dashboard auth cookie.
-func ClearCookie(w http.ResponseWriter) {
+func ClearCookie(w http.ResponseWriter, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 	})
 }
 

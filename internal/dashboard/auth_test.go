@@ -107,7 +107,7 @@ func TestSetAndClearCookie(t *testing.T) {
 
 	// Now clear it.
 	w2 := httptest.NewRecorder()
-	dashboard.ClearCookie(w2)
+	dashboard.ClearCookie(w2, false)
 	resp2 := w2.Result()
 	cookies2 := resp2.Cookies()
 	var cleared *http.Cookie

@@ -54,7 +54,7 @@ func (d *Dashboard) CookieAuthMiddleware(next http.Handler) http.Handler {
 		}
 		claims, err := ParseToken(tokenStr, d.JWTSecret)
 		if err != nil {
-			ClearCookie(w)
+			ClearCookie(w, d.Secure)
 			problem.Write(w, http.StatusUnauthorized, "unauthorized", "Unauthorized", "invalid or expired dashboard session")
 			return
 		}
@@ -167,7 +167,7 @@ func (d *Dashboard) LoginGET(w http.ResponseWriter, r *http.Request) {
 
 // LogoutPOST handles POST /dashboard/logout — clears the auth cookie and redirects to login.
 func (d *Dashboard) LogoutPOST(w http.ResponseWriter, r *http.Request) {
-	ClearCookie(w)
+	ClearCookie(w, d.Secure)
 	http.Redirect(w, r, "/dashboard/login", http.StatusFound)
 }
 
