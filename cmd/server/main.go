@@ -18,6 +18,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/earlypass/earlypass/internal/admin"
 	"github.com/earlypass/earlypass/internal/api"
 	"github.com/earlypass/earlypass/internal/config"
 	"github.com/earlypass/earlypass/internal/email"
@@ -135,6 +136,7 @@ func main() {
 		BaseURL:            cfg.BaseURL,
 		DashboardJWTSecret: dashJWTSecret,
 		DevMode:            cfg.DevMode,
+		SignupModeClosed:   cfg.SignupMode.IsClosed(),
 		TrustedProxies:     trustedProxies,
 		Logger:             logger,
 	})
@@ -190,6 +192,26 @@ func main() {
 		}
 	}()
 
+	// Admin API — separate port, separate router, ADMIN_API_KEY auth.
+	var adminSrv *http.Server
+	if cfg.AdminAPIKey != "" {
+		adminHandler := admin.NewHandler(db.Accounts(), logger)
+		adminRouter := admin.NewRouter(cfg.AdminAPIKey, adminHandler)
+		adminSrv = &http.Server{
+			Addr:              fmt.Sprintf(":%d", cfg.AdminPort),
+			Handler:           adminRouter,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		go func() {
+			logger.Info("admin API starting", slog.Int("port", cfg.AdminPort))
+			if err := adminSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Error("admin server error", slog.String("error", err.Error()))
+			}
+		}()
+	} else {
+		logger.Warn("ADMIN_API_KEY not set — admin API is disabled")
+	}
+
 	// Start server in background.
 	serverErr := make(chan error, 1)
 	go func() {
@@ -213,6 +235,12 @@ func main() {
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
+
+	if adminSrv != nil {
+		if err := adminSrv.Shutdown(shutdownCtx); err != nil {
+			logger.Warn("admin server shutdown", slog.String("error", err.Error()))
+		}
+	}
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("graceful shutdown failed", slog.String("error", err.Error()))

@@ -49,7 +49,9 @@ type Server struct {
 	trustedProxies []string
 	// devMode logs magic link URLs to the terminal instead of requiring a real email delivery.
 	devMode bool
-	logger  *slog.Logger
+	// signupModeClosed restricts account creation to pre-existing accounts.
+	signupModeClosed bool
+	logger           *slog.Logger
 }
 
 // NewServer creates a new Server with all required dependencies.
@@ -71,6 +73,7 @@ func NewServer(
 	baseURL string,
 	trustedProxies []string,
 	devMode bool,
+	signupModeClosed bool,
 	logger *slog.Logger,
 ) *Server {
 	return &Server{
@@ -91,6 +94,7 @@ func NewServer(
 		baseURL:              baseURL,
 		trustedProxies:       trustedProxies,
 		devMode:              devMode,
+		signupModeClosed:     signupModeClosed,
 		logger:               logger,
 	}
 }

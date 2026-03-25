@@ -180,6 +180,9 @@ curl localhost:3000/healthz
 | `TRUSTED_PROXIES` | no | Comma-separated CIDR ranges trusted to set `X-Real-IP`/`X-Forwarded-For`, e.g. `10.0.0.0/8` |
 | `PORT` | no | HTTP port (default: `3000`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | OTLP collector endpoint for traces |
+| `ADMIN_API_KEY` | no | Bearer token for the admin API. Admin API disabled if unset |
+| `ADMIN_PORT` | no | Admin API port (default: `3001`). Should be firewalled in production |
+| `SIGNUP_MODE` | no | `open` (default) or `closed`. Closed mode restricts sign-up to pre-existing accounts |
 
 ---
 

@@ -79,7 +79,7 @@ func (s *Server) InviteSignups(ctx context.Context, req generated.InviteSignupsR
 	if s.emailOutbox != nil && len(invited) > 0 {
 		subject := "You're in — " + campaign.Name + " early access"
 		for _, sg := range invited {
-			inviteLink := buildInviteLink(campaign.Settings.ProductURL, sg.InviteToken)
+			inviteLink := buildInviteLink(campaign.Settings.InviteLinkBase(), sg.InviteToken)
 			htmlBody, textBody, renderErr := emailTemplates.InviteEmail(campaign.Name, campaign.Settings.ProductURL, inviteLink)
 			if renderErr != nil {
 				s.logger.ErrorContext(ctx, "rendering invite email",

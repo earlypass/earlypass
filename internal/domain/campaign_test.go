@@ -213,6 +213,75 @@ t.Errorf("default ProductURL = %q, want empty", s.ProductURL)
 }
 }
 
+func TestCampaignValidate_InviteURL(t *testing.T) {
+	validCampaign := func() Campaign {
+		return Campaign{
+			ID:        uuid.New(),
+			Name:      "My Campaign",
+			Slug:      "my-campaign",
+			Status:    CampaignStatusActive,
+			AccountID: uuid.New(),
+			Settings: CampaignSettings{
+				BoostWeight: 1.0,
+				ProductURL:  "https://example.com",
+			},
+		}
+	}
+
+	t.Run("empty invite_url passes", func(t *testing.T) {
+		c := validCampaign()
+		c.Settings.InviteURL = ""
+		if err := c.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("valid invite_url passes", func(t *testing.T) {
+		c := validCampaign()
+		c.Settings.InviteURL = "https://api.earlypass.app/invite"
+		if err := c.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("invalid invite_url returns error", func(t *testing.T) {
+		c := validCampaign()
+		c.Settings.InviteURL = "://bad url"
+		if err := c.Validate(); err == nil {
+			t.Error("expected error for invalid invite_url")
+		}
+	})
+}
+
+func TestInviteLinkBase(t *testing.T) {
+	t.Run("returns invite_url when set", func(t *testing.T) {
+		s := CampaignSettings{
+			ProductURL: "https://product.com",
+			InviteURL:  "https://api.earlypass.app/invite",
+		}
+		if got := s.InviteLinkBase(); got != "https://api.earlypass.app/invite" {
+			t.Errorf("InviteLinkBase() = %q, want invite_url", got)
+		}
+	})
+
+	t.Run("falls back to product_url when invite_url empty", func(t *testing.T) {
+		s := CampaignSettings{
+			ProductURL: "https://product.com",
+			InviteURL:  "",
+		}
+		if got := s.InviteLinkBase(); got != "https://product.com" {
+			t.Errorf("InviteLinkBase() = %q, want product_url", got)
+		}
+	})
+
+	t.Run("returns empty when both empty", func(t *testing.T) {
+		s := CampaignSettings{}
+		if got := s.InviteLinkBase(); got != "" {
+			t.Errorf("InviteLinkBase() = %q, want empty", got)
+		}
+	})
+}
+
 func TestNewCampaign_NonPrintableNameReturnsError(t *testing.T) {
 _, err := NewCampaign("bad\x00name")
 if err == nil {

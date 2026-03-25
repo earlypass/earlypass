@@ -32,6 +32,21 @@ type CampaignSettings struct {
 	// emails and to derive the allowed origin for widget API requests — only
 	// requests whose Origin matches scheme://host of this URL are accepted.
 	ProductURL string `json:"product_url,omitempty"`
+	// InviteURL overrides ProductURL as the base for invite links sent in emails.
+	// When set, invite emails link to InviteURL?invite={token} instead of
+	// ProductURL?invite={token}. This lets you redirect invited users to a
+	// different page (e.g. a redemption handler) than the product landing page.
+	// Optional — falls back to ProductURL if empty.
+	InviteURL string `json:"invite_url,omitempty"`
+}
+
+// InviteLinkBase returns the URL to use as the base for invite links.
+// Prefers InviteURL; falls back to ProductURL.
+func (s CampaignSettings) InviteLinkBase() string {
+	if s.InviteURL != "" {
+		return s.InviteURL
+	}
+	return s.ProductURL
 }
 
 // DefaultCampaignSettings returns sensible defaults.
@@ -94,6 +109,11 @@ func (c *Campaign) Validate() error {
 	}
 	if _, err := parseOrigin(c.Settings.ProductURL); err != nil {
 		return fmt.Errorf("settings.product_url: must be a valid URL (e.g. https://example.com)")
+	}
+	if c.Settings.InviteURL != "" {
+		if _, err := parseOrigin(c.Settings.InviteURL); err != nil {
+			return fmt.Errorf("settings.invite_url: must be a valid URL (e.g. https://example.com/invite)")
+		}
 	}
 	return nil
 }

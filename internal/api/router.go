@@ -67,7 +67,10 @@ type Dependencies struct {
 	// DevMode enables dev-only endpoints (e.g. email preview).
 	// Never set this in production.
 	DevMode bool
-	Logger  *slog.Logger
+	// SignupModeClosed restricts account creation to pre-existing accounts.
+	// When true, magic links are only sent to emails that already have an account.
+	SignupModeClosed bool
+	Logger           *slog.Logger
 }
 
 // publicOperations are operation IDs that do not require Bearer authentication.
@@ -142,6 +145,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		deps.BaseURL,
 		deps.TrustedProxies,
 		deps.DevMode,
+		deps.SignupModeClosed,
 		deps.Logger,
 	)
 
@@ -210,17 +214,18 @@ func NewRouter(deps Dependencies) http.Handler {
 	}
 
 	dash := &dashboard.Dashboard{
-		JWTSecret:    jwtSecret,
-		Secure:       deps.SecureCookies,
-		Campaigns:    deps.CampaignStore,
-		Signups:      deps.SignupStore,
-		Webhooks:     deps.WebhookStore,
-		AccountStore: deps.AccountStore,
-		MagicLinks:   deps.MagicLinkStore,
-		APIKeys:      deps.AccountAPIKeyStore,
-		EmailOutbox:  deps.EmailOutboxStore,
-		BaseURL:      deps.BaseURL,
-		Logger:       deps.Logger,
+		JWTSecret:       jwtSecret,
+		Secure:          deps.SecureCookies,
+		Campaigns:       deps.CampaignStore,
+		Signups:         deps.SignupStore,
+		Webhooks:        deps.WebhookStore,
+		AccountStore:    deps.AccountStore,
+		MagicLinks:      deps.MagicLinkStore,
+		APIKeys:         deps.AccountAPIKeyStore,
+		EmailOutbox:     deps.EmailOutboxStore,
+		BaseURL:         deps.BaseURL,
+		SignupModeClosed: deps.SignupModeClosed,
+		Logger:          deps.Logger,
 	}
 	dash.Setup(r)
 
@@ -249,13 +254,14 @@ func NewRouter(deps Dependencies) http.Handler {
 	// OAuth 2.1 endpoints — mounted outside the chi router on a top-level mux
 	// so they follow RFC conventions (not /v1/ prefix).
 	oauthHandler := oauth.NewHandler(oauth.HandlerDeps{
-		Accounts:    deps.AccountStore,
-		MagicLinks:  deps.MagicLinkStore,
-		OAuthStore:  deps.OAuthStore,
-		EmailOutbox: deps.EmailOutboxStore,
-		RedisStore:  redisStore,
-		BaseURL:     deps.BaseURL,
-		Logger:      deps.Logger,
+		Accounts:         deps.AccountStore,
+		MagicLinks:       deps.MagicLinkStore,
+		OAuthStore:       deps.OAuthStore,
+		EmailOutbox:      deps.EmailOutboxStore,
+		RedisStore:       redisStore,
+		BaseURL:          deps.BaseURL,
+		SignupModeClosed: deps.SignupModeClosed,
+		Logger:           deps.Logger,
 	})
 
 	mux := http.NewServeMux()

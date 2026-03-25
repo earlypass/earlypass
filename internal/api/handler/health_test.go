@@ -27,7 +27,7 @@ func newHealthServer(dbErr, redisErr error) *handler.Server {
 		stubPinger{dbErr},
 		stubPinger{redisErr},
 		nil, // metrics — nil is safe; health handler does not record metrics
-		"", nil, false, logger,
+		"", nil, false, false, logger,
 	)
 }
 

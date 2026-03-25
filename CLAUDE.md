@@ -102,6 +102,7 @@ earlypass/
 │   ├── server/          # Main Go binary (API + dashboard + embedded widget)
 │   └── mcp/             # MCP server binary
 ├── internal/
+│   ├── admin/           # Admin API (separate port, ADMIN_API_KEY auth)
 │   ├── api/             # Router wiring (router.go + dependencies struct)
 │   │   ├── generated/   # oapi-codegen output — DO NOT edit; regenerate with `make generate`
 │   │   ├── handler/     # One file per resource + server.go (StrictServerInterface)
@@ -208,13 +209,17 @@ See `internal/store/postgres/testhelper_test.go` and `internal/api/handler/integ
 **Domain split**
 The binary serves only app concerns — the marketing site lives in the separate `earlypass-web` repo (Astro, deployed to GitHub Pages at `www.earlypass.app`).
 
-**Path-based routing** (all under `api.earlypass.app`)
+**Path-based routing** (main port, `api.earlypass.app`)
 - `/api/v1/...` — REST API (oapi-codegen routes, OAuth verify)
 - `/dashboard/...` — Dashboard SPA + auth + dashboard JSON API at `/dashboard/api/...`
 - `/widget/widget.js`, `/widget/widget.v{hash}.js` — Widget JS bundle
 - `/mcp` — MCP Streamable HTTP endpoint
 - `/healthz`, `/oauth/...`, `/.well-known/...` — root-level (no prefix)
 - Legacy 301 redirects in place: `/widget.js` → `/widget/widget.js`, `/v1/*` → `/api/v1/*`
+
+**Admin API** (separate port, ADMIN_PORT default 3001, internal only)
+- `/admin/v1/accounts` — POST: provision accounts (idempotent)
+- `/admin/v1/healthz` — GET: admin health check
 
 When embedding the widget, point `src` to `/widget/widget.js` (or the versioned path for immutable caching).
 
@@ -243,7 +248,9 @@ All key decisions are in `DECISIONS.md`. Read it before writing any code. The bi
 - **Idempotency:** `Idempotency-Key` header, stored in Redis, 24h TTL
 - **Rate limiting:** Token bucket per IP via Redis directly (`go-redis/redis_rate`)
 - **Webhooks:** Direct HTTP dispatch, exponential backoff, 3 retries
-- **Access granting:** `InviteTopN` is a single atomic CTE (`UPDATE…RETURNING`) — no separate select+update. Invite emails are fire-and-forget goroutines (skipped silently if `EmailSender` is nil). `ProductURL` in `CampaignSettings` drives the CTA link in invite emails.
+- **Access granting:** `InviteTopN` is a single atomic CTE (`UPDATE…RETURNING`) — no separate select+update. Invite emails are fire-and-forget goroutines (skipped silently if `EmailSender` is nil). `InviteLinkBase()` returns `InviteURL` if set, otherwise falls back to `ProductURL` for invite email links.
+- **Admin API:** Separate port (`ADMIN_PORT`, default 3001), authenticated via `ADMIN_API_KEY` bearer token. Intended for internal/ops use — never expose to public internet. Currently supports `POST /admin/v1/accounts` for provisioning accounts.
+- **Signup mode:** `SIGNUP_MODE=open` (default) allows anyone to create accounts. `SIGNUP_MODE=closed` restricts to pre-existing accounts only — magic links are silently dropped for unknown emails (no user enumeration). Use the admin API to provision accounts in closed mode.
 
 ---
 
@@ -268,6 +275,15 @@ TRUSTED_PROXIES      # Comma-separated list of CIDR ranges trusted to set X-Real
                      # is always used for rate limiting and fraud detection.
 PORT                 # HTTP port (default: 3000)
 OTEL_EXPORTER_OTLP_ENDPOINT  # OTLP collector endpoint
+
+# Admin API
+ADMIN_API_KEY        # Bearer token for the admin API. If empty, admin API is disabled.
+ADMIN_PORT           # Admin API port (default: 3001). Should be firewalled in production.
+
+# Signup mode
+SIGNUP_MODE          # "open" (default) or "closed".
+                     # "closed" restricts account creation to pre-existing accounts only.
+                     # Use admin API (POST /admin/v1/accounts) to provision accounts.
 ```
 
 ---

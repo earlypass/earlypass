@@ -53,6 +53,21 @@ func (s *Server) RequestMagicLink(ctx context.Context, req generated.RequestMagi
 		}, nil
 	}
 
+	// In closed mode, only send magic links to existing accounts.
+	// Always return the same response regardless — no user enumeration.
+	if s.signupModeClosed {
+		if _, err := s.accounts.GetByEmail(ctx, emailAddr); err != nil {
+			if s.metrics != nil {
+				s.metrics.RecordMagicLinkRequest(ctx, "closed_rejected")
+			}
+			s.logger.InfoContext(ctx, "closed mode: magic link request for unknown email", slog.String("email", emailAddr))
+			msg := "If an account exists for this email, a sign-in link has been sent."
+			return generated.RequestMagicLink202JSONResponse{
+				Message: &msg,
+			}, nil
+		}
+	}
+
 	token, err := domain.NewMagicLinkToken(emailAddr, nil, magicLinkTokenTTL)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "generating magic link token", slog.String("error", err.Error()))
@@ -136,10 +151,23 @@ func (s *Server) VerifyMagicLink(ctx context.Context, req generated.VerifyMagicL
 		return nil, fmt.Errorf("marking token used: %w", err)
 	}
 
-	account, _, err := s.accounts.GetOrCreateByEmail(ctx, t.Email)
-	if err != nil {
-		s.logger.ErrorContext(ctx, "getting or creating account", slog.String("error", err.Error()))
-		return nil, fmt.Errorf("getting or creating account: %w", err)
+	var account domain.Account
+	if s.signupModeClosed {
+		var getErr error
+		account, getErr = s.accounts.GetByEmail(ctx, t.Email)
+		if getErr != nil {
+			// Account doesn't exist and closed mode — reject.
+			return generated.VerifyMagicLink400ApplicationProblemPlusJSONResponse{
+				BadRequestApplicationProblemPlusJSONResponse: problemBadRequest("account not found — this instance is invite-only"),
+			}, nil
+		}
+	} else {
+		var createErr error
+		account, _, createErr = s.accounts.GetOrCreateByEmail(ctx, t.Email)
+		if createErr != nil {
+			s.logger.ErrorContext(ctx, "getting or creating account", slog.String("error", createErr.Error()))
+			return nil, fmt.Errorf("getting or creating account: %w", createErr)
+		}
 	}
 
 	if t.IsOAuthFlow() {

@@ -37,7 +37,10 @@ type Dashboard struct {
 	EmailOutbox  store.EmailOutboxStore
 	// BaseURL is the public base URL (no trailing slash) used to build verify links in emails.
 	BaseURL string
-	Logger  *slog.Logger
+	// SignupModeClosed restricts account creation to pre-existing accounts.
+	// When true, magic links are only sent to emails that already have an account.
+	SignupModeClosed bool
+	Logger           *slog.Logger
 }
 
 // CookieAuthMiddleware validates the dashboard auth cookie and attaches the
@@ -88,7 +91,7 @@ const authPageCSS = `
   .icon { font-size: 48px; margin-bottom: 16px; text-align: center; }
 `
 
-const loginHTML = `<!DOCTYPE html>
+const loginHTMLOpen = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -100,6 +103,26 @@ const loginHTML = `<!DOCTYPE html>
 <div class="card">
   <h1>Sign in to EarlyPass</h1>
   <p class="subtitle">Enter your email and we'll send you a magic sign-in link. No password required.</p>
+  <form method="POST" action="/dashboard/login">
+    <label for="email">Email address</label>
+    <input type="email" id="email" name="email" required placeholder="you@example.com" autofocus>
+    <button class="btn" type="submit">Send magic link</button>
+  </form>
+</div>
+</body></html>`
+
+const loginHTMLClosed = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in – EarlyPass</title>
+<style>` + authPageCSS + `</style>
+</head>
+<body>
+<div class="header"><a class="logo" href="/"><img src="/assets/logo.svg" alt="" height="28"><span class="logo-text">EarlyPass</span></a></div>
+<div class="card">
+  <h1>Sign in to EarlyPass</h1>
+  <p class="subtitle">This instance is invite-only. Enter the email you were invited with and we'll send you a magic sign-in link.</p>
   <form method="POST" action="/dashboard/login">
     <label for="email">Email address</label>
     <input type="email" id="email" name="email" required placeholder="you@example.com" autofocus>
@@ -135,7 +158,11 @@ func (d *Dashboard) LoginGET(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(loginHTML))
+	if d.SignupModeClosed {
+		_, _ = w.Write([]byte(loginHTMLClosed))
+	} else {
+		_, _ = w.Write([]byte(loginHTMLOpen))
+	}
 }
 
 // LogoutPOST handles POST /dashboard/logout — clears the auth cookie and redirects to login.
@@ -154,6 +181,17 @@ func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 	if _, err := mail.ParseAddress(emailAddr); err != nil {
 		problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", "invalid email address")
 		return
+	}
+
+	// In closed mode, only send magic links to existing accounts.
+	// Always show the check-inbox page regardless — no user enumeration.
+	if d.SignupModeClosed {
+		if _, err := d.AccountStore.GetByEmail(r.Context(), emailAddr); err != nil {
+			d.Logger.InfoContext(r.Context(), "closed mode: dashboard login for unknown email", slog.String("email", emailAddr))
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(checkInboxHTML))
+			return
+		}
 	}
 
 	tok, err := domain.NewMagicLinkToken(emailAddr, nil, 15*time.Minute)
@@ -235,12 +273,23 @@ func (d *Dashboard) VerifyGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, _, err := d.AccountStore.GetOrCreateByEmail(r.Context(), tok.Email)
-	if err != nil {
-		d.Logger.ErrorContext(r.Context(), "getting/creating account for dashboard login",
-			slog.String("email", tok.Email), slog.String("error", err.Error()))
-		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
-		return
+	var account domain.Account
+	if d.SignupModeClosed {
+		var getErr error
+		account, getErr = d.AccountStore.GetByEmail(r.Context(), tok.Email)
+		if getErr != nil {
+			problem.Write(w, http.StatusForbidden, "forbidden", "Forbidden", "this instance is invite-only")
+			return
+		}
+	} else {
+		var createErr error
+		account, _, createErr = d.AccountStore.GetOrCreateByEmail(r.Context(), tok.Email)
+		if createErr != nil {
+			d.Logger.ErrorContext(r.Context(), "getting/creating account for dashboard login",
+				slog.String("email", tok.Email), slog.String("error", createErr.Error()))
+			problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
+			return
+		}
 	}
 
 	jwtStr, err := IssueToken(account.ID, d.JWTSecret)

@@ -29,36 +29,39 @@ const (
 
 // Handler holds OAuth 2.1 handler dependencies.
 type Handler struct {
-	accounts    store.AccountStore
-	magicLinks  store.MagicLinkStore
-	oauthStore  store.OAuthStore
-	emailOutbox store.EmailOutboxStore
-	redisStore  *redisstore.Client
-	baseURL     string
-	logger      *slog.Logger
+	accounts         store.AccountStore
+	magicLinks       store.MagicLinkStore
+	oauthStore       store.OAuthStore
+	emailOutbox      store.EmailOutboxStore
+	redisStore       *redisstore.Client
+	baseURL          string
+	signupModeClosed bool
+	logger           *slog.Logger
 }
 
 // HandlerDeps contains the dependencies for the OAuth handler.
 type HandlerDeps struct {
-	Accounts    store.AccountStore
-	MagicLinks  store.MagicLinkStore
-	OAuthStore  store.OAuthStore
-	EmailOutbox store.EmailOutboxStore
-	RedisStore  *redisstore.Client
-	BaseURL     string
-	Logger      *slog.Logger
+	Accounts         store.AccountStore
+	MagicLinks       store.MagicLinkStore
+	OAuthStore       store.OAuthStore
+	EmailOutbox      store.EmailOutboxStore
+	RedisStore       *redisstore.Client
+	BaseURL          string
+	SignupModeClosed bool
+	Logger           *slog.Logger
 }
 
 // NewHandler creates a new OAuth handler with the given dependencies.
 func NewHandler(deps HandlerDeps) *Handler {
 	return &Handler{
-		accounts:    deps.Accounts,
-		magicLinks:  deps.MagicLinks,
-		oauthStore:  deps.OAuthStore,
-		emailOutbox: deps.EmailOutbox,
-		redisStore:  deps.RedisStore,
-		baseURL:     deps.BaseURL,
-		logger:      deps.Logger,
+		accounts:         deps.Accounts,
+		magicLinks:       deps.MagicLinks,
+		oauthStore:       deps.OAuthStore,
+		emailOutbox:      deps.EmailOutbox,
+		redisStore:       deps.RedisStore,
+		baseURL:          deps.BaseURL,
+		signupModeClosed: deps.SignupModeClosed,
+		logger:           deps.Logger,
 	}
 }
 
@@ -200,6 +203,19 @@ func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	if emailAddr == "" {
 		http.Error(w, "email is required", http.StatusBadRequest)
 		return
+	}
+
+	// In closed mode, only send magic links to existing accounts.
+	// Always show the check-inbox page regardless — no user enumeration.
+	if h.signupModeClosed {
+		if _, err := h.accounts.GetByEmail(r.Context(), emailAddr); err != nil {
+			h.logger.Info("closed mode: oauth authorize for unknown email", slog.String("email", emailAddr))
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if tmplErr := checkInboxTmpl.Execute(w, nil); tmplErr != nil {
+				h.logger.Error("rendering check inbox page", slog.String("error", tmplErr.Error()))
+			}
+			return
+		}
 	}
 
 	// Rate limit magic link requests per email.
