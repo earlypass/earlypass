@@ -897,6 +897,15 @@ components:
           description: |
             The URL of the product page. Used as the CTA link in invite emails.
             Widget API requests are restricted to the origin derived from this URL.
+        invite_url:
+          type: string
+          format: uri
+          example: https://api.example.com/invite
+          description: |
+            Optional. Overrides product_url as the base for invite links in emails.
+            When set, invite emails link to invite_url?invite={token} instead of
+            product_url?invite={token}. Useful for redirecting invited users to a
+            separate handler or redemption page.
 
     Campaign:
       type: object

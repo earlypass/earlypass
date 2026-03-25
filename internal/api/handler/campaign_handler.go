@@ -169,6 +169,9 @@ func (s *Server) UpdateCampaign(ctx context.Context, req generated.UpdateCampaig
 	if req.Body.Settings != nil && req.Body.Settings.ProductUrl != nil {
 		campaign.Settings.ProductURL = *req.Body.Settings.ProductUrl // oapi-codegen lowercases URL → Url
 	}
+	if req.Body.Settings != nil && req.Body.Settings.InviteUrl != nil {
+		campaign.Settings.InviteURL = *req.Body.Settings.InviteUrl
+	}
 
 	if err := campaign.Validate(); err != nil {
 		return generated.UpdateCampaign400ApplicationProblemPlusJSONResponse{
@@ -242,6 +245,7 @@ func domainCampaignToAPI(c domain.Campaign) generated.Campaign {
 	settings := generated.CampaignSettings{
 		BoostWeight: &c.Settings.BoostWeight,
 		ProductUrl:  &c.Settings.ProductURL,
+		InviteUrl:   &c.Settings.InviteURL,
 	}
 	return generated.Campaign{
 		Id:         c.ID,

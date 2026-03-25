@@ -780,6 +780,7 @@ func (d *Dashboard) GetSettings(w http.ResponseWriter, r *http.Request) {
 		"boost_weight": campaign.Settings.BoostWeight,
 		"max_signups":  campaign.MaxSignups,
 		"product_url":  campaign.Settings.ProductURL,
+		"invite_url":   campaign.Settings.InviteURL,
 		"base_url":     d.BaseURL,
 	})
 }
@@ -797,6 +798,7 @@ func (d *Dashboard) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		BoostWeight *float64 `json:"boost_weight"`
 		MaxSignups  *int     `json:"max_signups"`
 		ProductURL  *string  `json:"product_url"`
+		InviteURL   *string  `json:"invite_url"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", err.Error())
@@ -819,6 +821,9 @@ func (d *Dashboard) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if body.ProductURL != nil {
 		updated.Settings.ProductURL = *body.ProductURL
 	}
+	if body.InviteURL != nil {
+		updated.Settings.InviteURL = *body.InviteURL
+	}
 	if err := updated.Validate(); err != nil {
 		problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", err.Error())
 		return
@@ -835,6 +840,7 @@ func (d *Dashboard) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		"boost_weight": updated.Settings.BoostWeight,
 		"max_signups":  updated.MaxSignups,
 		"product_url":  updated.Settings.ProductURL,
+		"invite_url":   updated.Settings.InviteURL,
 	})
 }
 

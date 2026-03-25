@@ -36,6 +36,12 @@ If you change the project structure, add a new env var, add a new make target, o
 - **Never log secrets** — always hash API keys (bcrypt), validate all input
 - **RFC 7807 problem details** for all error responses
 - **Keep `CLAUDE.md` and `README.md` up to date** — update them in the same commit whenever structure, commands, env vars, or public API changes
+- **New features must be complete across all surfaces** — when adding a field, endpoint, or behaviour:
+  1. **REST API** — handler + OpenAPI spec + `make generate` + response mapping (`domainXxxToAPI`)
+  2. **Dashboard** — backend (GetSettings/UpdateSettings) + frontend form field + save payload
+  3. **MCP** — tool params + handling + response mapping
+  4. **Tests** — unit tests for domain logic, handler tests for behaviour, MCP tests for tool responses. Every new field must be asserted in existing tests that check response shapes.
+  5. **Docs** — CLAUDE.md env vars / architecture, README.md env var table
 
 ---
 

@@ -56,6 +56,7 @@ func registerCampaignTools(s *mcpserver.MCPServer, deps Dependencies) {
 				Status      string  `json:"status"`
 				BoostWeight float64 `json:"boost_weight"`
 				ProductURL  string  `json:"product_url,omitempty"`
+				InviteURL   string  `json:"invite_url,omitempty"`
 				MaxSignups  *int    `json:"max_signups,omitempty"`
 				CreatedAt   string  `json:"created_at"`
 			}
@@ -69,6 +70,7 @@ func registerCampaignTools(s *mcpserver.MCPServer, deps Dependencies) {
 					Status:      string(c.Status),
 					BoostWeight: c.Settings.BoostWeight,
 					ProductURL:  c.Settings.ProductURL,
+					InviteURL:   c.Settings.InviteURL,
 					MaxSignups:  c.MaxSignups,
 					CreatedAt:   c.CreatedAt.String(),
 				}
@@ -92,6 +94,9 @@ func registerCampaignTools(s *mcpserver.MCPServer, deps Dependencies) {
 			),
 			mcp.WithString("product_url",
 				mcp.Description("URL of the product that invited users are directed to. Used as the CTA link in invite emails."),
+			),
+			mcp.WithString("invite_url",
+				mcp.Description("Optional. Overrides product_url as the base for invite links in emails. Useful for directing invited users to a redemption page."),
 			),
 			mcp.WithNumber("boost_weight",
 				mcp.Description("Queue position boost per referral. Each referral moves the signup up by this many positions. Default: 1.0."),
@@ -121,6 +126,9 @@ func registerCampaignTools(s *mcpserver.MCPServer, deps Dependencies) {
 			if productURL := mcp.ParseString(req, "product_url", ""); productURL != "" {
 				campaign.Settings.ProductURL = productURL
 			}
+			if inviteURL := mcp.ParseString(req, "invite_url", ""); inviteURL != "" {
+				campaign.Settings.InviteURL = inviteURL
+			}
 
 			if boostWeight := mcp.ParseFloat64(req, "boost_weight", -1); boostWeight >= 0 {
 				campaign.Settings.BoostWeight = boostWeight
@@ -146,6 +154,7 @@ func registerCampaignTools(s *mcpserver.MCPServer, deps Dependencies) {
 				"status":       string(campaign.Status),
 				"boost_weight": campaign.Settings.BoostWeight,
 				"product_url":  campaign.Settings.ProductURL,
+				"invite_url":   campaign.Settings.InviteURL,
 				"max_signups":  campaign.MaxSignups,
 				"created_at":   campaign.CreatedAt.String(),
 				"updated_at":   campaign.UpdatedAt.String(),
@@ -192,6 +201,7 @@ func registerCampaignTools(s *mcpserver.MCPServer, deps Dependencies) {
 				"status":       string(campaign.Status),
 				"boost_weight": campaign.Settings.BoostWeight,
 				"product_url":  campaign.Settings.ProductURL,
+				"invite_url":   campaign.Settings.InviteURL,
 				"max_signups":  campaign.MaxSignups,
 				"created_at":   campaign.CreatedAt.String(),
 				"updated_at":   campaign.UpdatedAt.String(),
@@ -222,6 +232,9 @@ func registerCampaignTools(s *mcpserver.MCPServer, deps Dependencies) {
 			),
 			mcp.WithString("product_url",
 				mcp.Description("URL of the product that invited users are directed to. Used as the CTA link in invite emails."),
+			),
+			mcp.WithString("invite_url",
+				mcp.Description("Optional. Overrides product_url as the base for invite links in emails. Set to empty string to clear."),
 			),
 			mcp.WithNumber("boost_weight",
 				mcp.Description("Queue position boost per referral. Each referral moves the signup up by this many positions. Must be >= 0."),
@@ -272,6 +285,12 @@ func registerCampaignTools(s *mcpserver.MCPServer, deps Dependencies) {
 			if productURL := mcp.ParseString(req, "product_url", ""); productURL != "" {
 				updated.Settings.ProductURL = productURL
 			}
+			// invite_url: empty string clears it, absent means unchanged.
+			if inviteURL, ok := req.GetArguments()["invite_url"]; ok {
+				if s, isStr := inviteURL.(string); isStr {
+					updated.Settings.InviteURL = s
+				}
+			}
 
 			if boostWeight := mcp.ParseFloat64(req, "boost_weight", -1); boostWeight >= 0 {
 				updated.Settings.BoostWeight = boostWeight
@@ -302,6 +321,7 @@ func registerCampaignTools(s *mcpserver.MCPServer, deps Dependencies) {
 				"status":       string(updated.Status),
 				"boost_weight": updated.Settings.BoostWeight,
 				"product_url":  updated.Settings.ProductURL,
+				"invite_url":   updated.Settings.InviteURL,
 				"max_signups":  updated.MaxSignups,
 				"created_at":   updated.CreatedAt.String(),
 				"updated_at":   updated.UpdatedAt.String(),

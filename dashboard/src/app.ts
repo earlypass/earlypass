@@ -770,6 +770,7 @@ function SettingsPage() {
         max_signups: form.max_signups ? parseInt(form.max_signups, 10) : null,
         status: form.status,
         product_url: form.product_url,
+        invite_url: form.invite_url || '',
       });
       setMsg({ type: 'success', text: 'Settings saved.' });
       settingsAsync.reload();
@@ -822,6 +823,13 @@ function SettingsPage() {
               <label style="display:flex;align-items:center">Product URL <${Tooltip} text="Your product's URL. Used as the CTA link in invite emails and to restrict the widget to your domain — the widget will only work when embedded on this origin (e.g. https://yoursite.com)." /></label>
               <input required type="url" placeholder="https://yourproduct.com" value=${form.product_url || ''}
                 onInput=${e => setForm(f => ({ ...f, product_url: e.target.value }))} />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="flex:1">
+              <label style="display:flex;align-items:center">Invite URL <${Tooltip} text="Optional. Overrides Product URL as the base for invite links in emails. Use this to send invited users to a different page (e.g. an invite handler) instead of your landing page. Leave blank to use the Product URL." /></label>
+              <input type="url" placeholder="https://api.example.com/invite" value=${form.invite_url || ''}
+                onInput=${e => setForm(f => ({ ...f, invite_url: e.target.value }))} />
             </div>
           </div>
           <button class="btn btn-primary" type="submit" disabled=${saving}>Save settings</button>

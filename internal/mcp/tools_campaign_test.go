@@ -65,6 +65,7 @@ func TestGetCampaign_IncludesAllFields(t *testing.T) {
 	maxSignups := 50
 	campaign := newTestCampaign(account.ID, "My Campaign")
 	campaign.Settings.ProductURL = "https://example.com/product"
+	campaign.Settings.InviteURL = "https://api.example.com/invite"
 	campaign.Settings.BoostWeight = 2.5
 	campaign.MaxSignups = &maxSignups
 
@@ -98,6 +99,9 @@ func TestGetCampaign_IncludesAllFields(t *testing.T) {
 	if got["product_url"] != "https://example.com/product" {
 		t.Errorf("product_url = %v, want %q", got["product_url"], "https://example.com/product")
 	}
+	if got["invite_url"] != "https://api.example.com/invite" {
+		t.Errorf("invite_url = %v, want %q", got["invite_url"], "https://api.example.com/invite")
+	}
 	if got["boost_weight"] != 2.5 {
 		t.Errorf("boost_weight = %v, want 2.5", got["boost_weight"])
 	}
@@ -112,6 +116,7 @@ func TestListCampaigns_IncludesSettingsFields(t *testing.T) {
 	account := domain.Account{ID: uuid.New(), Email: "owner@example.com"}
 	campaign := newTestCampaign(account.ID, "My Campaign")
 	campaign.Settings.ProductURL = "https://product.example.com"
+	campaign.Settings.InviteURL = "https://api.product.example.com/invite"
 	campaign.Settings.BoostWeight = 3.0
 
 	deps := Dependencies{
@@ -149,6 +154,9 @@ func TestListCampaigns_IncludesSettingsFields(t *testing.T) {
 	if item["product_url"] != "https://product.example.com" {
 		t.Errorf("product_url = %v, want %q", item["product_url"], "https://product.example.com")
 	}
+	if item["invite_url"] != "https://api.product.example.com/invite" {
+		t.Errorf("invite_url = %v, want %q", item["invite_url"], "https://api.product.example.com/invite")
+	}
 	if item["boost_weight"] != 3.0 {
 		t.Errorf("boost_weight = %v, want 3.0", item["boost_weight"])
 	}
@@ -174,6 +182,7 @@ func TestCreateCampaign_WithInitialSettings(t *testing.T) {
 			Arguments: map[string]any{
 				"name":         "Launch Campaign",
 				"product_url":  "https://launch.example.com",
+				"invite_url":   "https://api.launch.example.com/invite",
 				"boost_weight": 2.0,
 				"max_signups":  100,
 			},
@@ -194,6 +203,9 @@ func TestCreateCampaign_WithInitialSettings(t *testing.T) {
 
 	if got["product_url"] != "https://launch.example.com" {
 		t.Errorf("product_url = %v, want %q", got["product_url"], "https://launch.example.com")
+	}
+	if got["invite_url"] != "https://api.launch.example.com/invite" {
+		t.Errorf("invite_url = %v, want %q", got["invite_url"], "https://api.launch.example.com/invite")
 	}
 	if got["boost_weight"] != 2.0 {
 		t.Errorf("boost_weight = %v, want 2.0", got["boost_weight"])
@@ -224,6 +236,7 @@ func TestUpdateCampaign_UpdateSettings(t *testing.T) {
 				"campaign_id":  campaign.ID.String(),
 				"name":         "Updated Name",
 				"product_url":  "https://updated.example.com",
+				"invite_url":   "https://api.updated.example.com/invite",
 				"boost_weight": 3.0,
 				"max_signups":  200,
 			},
@@ -247,6 +260,9 @@ func TestUpdateCampaign_UpdateSettings(t *testing.T) {
 	}
 	if got["product_url"] != "https://updated.example.com" {
 		t.Errorf("product_url = %v, want %q", got["product_url"], "https://updated.example.com")
+	}
+	if got["invite_url"] != "https://api.updated.example.com/invite" {
+		t.Errorf("invite_url = %v, want %q", got["invite_url"], "https://api.updated.example.com/invite")
 	}
 	if got["boost_weight"] != 3.0 {
 		t.Errorf("boost_weight = %v, want 3.0", got["boost_weight"])
@@ -296,6 +312,48 @@ func TestUpdateCampaign_RemoveMaxSignups(t *testing.T) {
 
 	if _, ok := got["max_signups"]; ok && got["max_signups"] != nil {
 		t.Errorf("max_signups should be nil after removal, got %v", got["max_signups"])
+	}
+}
+
+func TestUpdateCampaign_ClearInviteURL(t *testing.T) {
+	t.Parallel()
+
+	account := domain.Account{ID: uuid.New(), Email: "owner@example.com"}
+	campaign := newTestCampaign(account.ID, "Invite URL Campaign")
+	campaign.Settings.InviteURL = "https://api.example.com/invite"
+
+	deps := Dependencies{
+		CampaignStore: newMockCampaignStore(campaign),
+		Logger:        nopLoggerInternal(),
+	}
+
+	c := newInProcessClient(t, deps)
+	ctx := contextWithAccount(account)
+
+	result, err := c.CallTool(ctx, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "update_campaign",
+			Arguments: map[string]any{
+				"campaign_id": campaign.ID.String(),
+				"invite_url":  "", // clear it
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("call tool: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool returned error: %v", result.Content)
+	}
+
+	var got map[string]any
+	text := result.Content[0].(mcp.TextContent).Text
+	if err := json.Unmarshal([]byte(text), &got); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+
+	if got["invite_url"] != "" {
+		t.Errorf("invite_url = %v, want empty string after clearing", got["invite_url"])
 	}
 }
 

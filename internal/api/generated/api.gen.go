@@ -206,6 +206,12 @@ type CampaignSettings struct {
 	// BoostWeight How many queue positions each referral is worth
 	BoostWeight *float64 `json:"boost_weight,omitempty"`
 
+	// InviteUrl Optional. Overrides product_url as the base for invite links in emails.
+	// When set, invite emails link to invite_url?invite={token} instead of
+	// product_url?invite={token}. Useful for redirecting invited users to a
+	// separate handler or redemption page.
+	InviteUrl *string `json:"invite_url,omitempty"`
+
 	// ProductUrl The URL of the product page. Used as the CTA link in invite emails.
 	// Widget API requests are restricted to the origin derived from this URL.
 	ProductUrl *string `json:"product_url,omitempty"`

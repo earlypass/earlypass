@@ -114,6 +114,69 @@ func TestIntegration_UpdateCampaign_UpdatesName(t *testing.T) {
 	}
 }
 
+func TestIntegration_UpdateCampaign_SetsInviteURL(t *testing.T) {
+	ts := newTestServer(t)
+	accountKey, _, campaignID := createCampaignWithAuth(t, ts, uniqueName("Update InviteURL"))
+	auth := map[string]string{"Authorization": "Bearer " + accountKey}
+
+	resp := ts.do(t, http.MethodPatch, "/api/v1/campaigns/"+campaignID,
+		map[string]any{
+			"settings": map[string]any{
+				"product_url": "https://example.com",
+				"invite_url":  "https://api.example.com/invite",
+			},
+		}, auth)
+	if resp.StatusCode != http.StatusOK {
+		discard(resp)
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var body map[string]any
+	decode(t, resp, &body)
+
+	settings, ok := body["settings"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected settings object, got %T", body["settings"])
+	}
+	if settings["invite_url"] != "https://api.example.com/invite" {
+		t.Errorf("invite_url = %v, want %q", settings["invite_url"], "https://api.example.com/invite")
+	}
+
+	// Verify it persists via GET.
+	getResp := ts.do(t, http.MethodGet, "/api/v1/campaigns/"+campaignID, nil, auth)
+	if getResp.StatusCode != http.StatusOK {
+		discard(getResp)
+		t.Fatalf("GET status = %d, want 200", getResp.StatusCode)
+	}
+
+	var getBody map[string]any
+	decode(t, getResp, &getBody)
+
+	getSettings, ok := getBody["settings"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected settings object in GET, got %T", getBody["settings"])
+	}
+	if getSettings["invite_url"] != "https://api.example.com/invite" {
+		t.Errorf("GET invite_url = %v, want %q", getSettings["invite_url"], "https://api.example.com/invite")
+	}
+}
+
+func TestIntegration_UpdateCampaign_InvalidInviteURL(t *testing.T) {
+	ts := newTestServer(t)
+	accountKey, _, campaignID := createCampaignWithAuth(t, ts, uniqueName("Update Invalid InviteURL"))
+	auth := map[string]string{"Authorization": "Bearer " + accountKey}
+
+	resp := ts.do(t, http.MethodPatch, "/api/v1/campaigns/"+campaignID,
+		map[string]any{
+			"settings": map[string]any{"invite_url": "://bad url"},
+		}, auth)
+	defer discard(resp)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
 // ── DeleteCampaign ───────────────────────────────────────────────────────────
 
 func TestIntegration_DeleteCampaign_WrongAccount(t *testing.T) {
