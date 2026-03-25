@@ -1,0 +1,39 @@
+version: 2
+
+updates:
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Go modules
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-deps:
+        patterns: ["*"]
+        exclude-patterns: ["github.com/earlypass/*"]
+
+  # npm — widget
+  - package-ecosystem: npm
+    directory: /widget
+    schedule:
+      interval: monthly
+    groups:
+      widget-deps:
+        patterns: ["*"]
+
+  # npm — dashboard
+  - package-ecosystem: npm
+    directory: /dashboard
+    schedule:
+      interval: monthly
+    groups:
+      dashboard-deps:
+        patterns: ["*"]
