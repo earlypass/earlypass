@@ -44,9 +44,9 @@ func (s *MagicLinkStore) Create(ctx context.Context, t domain.MagicLinkToken) er
 	}
 
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO magic_link_tokens (token, email, oauth_state, expires_at)
-		 VALUES ($1, $2, $3, $4)`,
-		t.Token, t.Email, oauthStateRaw, t.ExpiresAt,
+		`INSERT INTO magic_link_tokens (token, code, session_token, email, oauth_state, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		t.Token, t.Code, t.SessionToken, t.Email, oauthStateRaw, t.ExpiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting magic link token: %w", err)
@@ -54,12 +54,22 @@ func (s *MagicLinkStore) Create(ctx context.Context, t domain.MagicLinkToken) er
 	return nil
 }
 
-// Get fetches a token by its value.
+// Get fetches a token by its internal token value.
 func (s *MagicLinkStore) Get(ctx context.Context, token string) (domain.MagicLinkToken, error) {
 	row := s.pool.QueryRow(ctx,
-		`SELECT token, email, oauth_state, expires_at, used_at
+		`SELECT token, code, session_token, email, oauth_state, expires_at, used_at
 		 FROM magic_link_tokens WHERE token = $1`,
 		token,
+	)
+	return scanMagicLinkToken(row)
+}
+
+// GetBySessionToken fetches a token by its session token.
+func (s *MagicLinkStore) GetBySessionToken(ctx context.Context, sessionToken string) (domain.MagicLinkToken, error) {
+	row := s.pool.QueryRow(ctx,
+		`SELECT token, code, session_token, email, oauth_state, expires_at, used_at
+		 FROM magic_link_tokens WHERE session_token = $1`,
+		sessionToken,
 	)
 	return scanMagicLinkToken(row)
 }
@@ -95,7 +105,7 @@ func scanMagicLinkToken(row rowScanner) (domain.MagicLinkToken, error) {
 	var oauthStateRaw []byte
 	var usedAt *time.Time
 
-	err := row.Scan(&t.Token, &t.Email, &oauthStateRaw, &t.ExpiresAt, &usedAt)
+	err := row.Scan(&t.Token, &t.Code, &t.SessionToken, &t.Email, &oauthStateRaw, &t.ExpiresAt, &usedAt)
 	if err != nil {
 		return domain.MagicLinkToken{}, fmt.Errorf("scanning magic link token: %w", mapNotFound(err))
 	}

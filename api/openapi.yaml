@@ -54,7 +54,12 @@ paths:
   /api/v1/auth/magic-link:
     post:
       operationId: requestMagicLink
-      summary: Request a magic sign-in link
+      summary: Request a sign-in code
+      description: |
+        Sends a 6-digit OTP code to the provided email address and returns a
+        `session_token` that must be presented alongside the code when calling
+        `POST /api/v1/auth/verify`. This session binding ensures the code can
+        only be redeemed by the client that originally requested it.
       tags:
         - auth
       security: []
@@ -66,7 +71,7 @@ paths:
               $ref: "#/components/schemas/MagicLinkRequest"
       responses:
         "202":
-          description: Magic link sent (or would be sent if email exists)
+          description: Sign-in code sent (or would be sent if email exists). The `session_token` must be stored and passed to `POST /api/v1/auth/verify`.
           content:
             application/json:
               schema:
@@ -77,31 +82,29 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/auth/verify:
-    get:
+    post:
       operationId: verifyMagicLink
-      summary: Verify a magic link token
+      summary: Verify the OTP sign-in code
+      description: |
+        Verifies the 6-digit code emailed to the user against the `session_token`
+        returned by `POST /api/v1/auth/magic-link`. Both must match the same
+        auth attempt. On success returns account info and a long-lived API key.
       tags:
         - auth
       security: []
-      parameters:
-        - name: token
-          in: query
-          required: true
-          schema:
-            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MagicLinkVerifyRequest"
       responses:
         "200":
-          description: Token verified — returns account info and API key (REST flow only)
+          description: Code verified — returns account info and API key
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MagicLinkVerifyResponse"
-        "302":
-          description: OAuth flow redirect to client redirect_uri
-          headers:
-            Location:
-              schema:
-                type: string
         "400":
           $ref: "#/components/responses/BadRequest"
 
@@ -1224,6 +1227,22 @@ components:
       properties:
         message:
           type: string
+        session_token:
+          type: string
+          description: Opaque token that binds this auth attempt to the requesting client. Must be passed to POST /api/v1/auth/verify along with the emailed code.
+
+    MagicLinkVerifyRequest:
+      type: object
+      required:
+        - session_token
+        - code
+      properties:
+        session_token:
+          type: string
+          description: The session_token returned by POST /api/v1/auth/magic-link.
+        code:
+          type: string
+          description: The 6-digit OTP code received via email.
 
     MagicLinkVerifyResponse:
       type: object

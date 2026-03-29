@@ -101,17 +101,17 @@ func TestInviteEmail_EmptyProductURL(t *testing.T) {
 func TestMagicLinkEmail(t *testing.T) {
 	t.Parallel()
 
-	html, text, err := email.MagicLinkEmail("https://example.com/auth/magic/tok123")
+	html, text, err := email.MagicLinkEmail("123456")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	mustContain(t, "html", html, "https://example.com/auth/magic/tok123")
-	mustContain(t, "html", html, "Sign in to EarlyPass")
+	mustContain(t, "html", html, "123456")
+	mustContain(t, "html", html, "sign-in code")
 	mustContain(t, "html", html, "15 minutes")
 	mustContain(t, "html", html, "EarlyPass") // branding header
 
-	mustContain(t, "text", text, "https://example.com/auth/magic/tok123")
+	mustContain(t, "text", text, "123456")
 }
 
 func TestLayoutConsistency(t *testing.T) {
@@ -132,7 +132,7 @@ func TestLayoutConsistency(t *testing.T) {
 			return email.InviteEmail("Acme", "https://myapp.com", "")
 		},
 		"magic_link": func() (string, string, error) {
-			return email.MagicLinkEmail("https://example.com/auth/tok")
+			return email.MagicLinkEmail("123456")
 		},
 	}
 

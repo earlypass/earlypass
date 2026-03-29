@@ -32,6 +32,12 @@ func TestMagicLinkStore_Create_Get(t *testing.T) {
 		if got.Token != tok.Token || got.Email != tok.Email {
 			t.Errorf("token mismatch: want %q/%q, got %q/%q", tok.Token, tok.Email, got.Token, got.Email)
 		}
+		if got.Code != tok.Code {
+			t.Errorf("code mismatch: want %q, got %q", tok.Code, got.Code)
+		}
+		if got.SessionToken != tok.SessionToken {
+			t.Errorf("session token mismatch: want %q, got %q", tok.SessionToken, got.SessionToken)
+		}
 		if got.OAuthState != nil {
 			t.Error("want nil OAuthState for REST token")
 		}
@@ -75,6 +81,42 @@ func TestMagicLinkStore_Create_Get(t *testing.T) {
 
 	t.Run("get unknown token returns ErrNotFound", func(t *testing.T) {
 		_, err := ms.Get(ctx, "nonexistent-token-abc")
+		if !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("want ErrNotFound, got %v", err)
+		}
+	})
+}
+
+func TestMagicLinkStore_GetBySessionToken(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	ms := db.MagicLinks()
+
+	t.Run("returns token by session token", func(t *testing.T) {
+		tok, err := domain.NewMagicLinkToken(uniqueEmail("ml-session"), nil, 15*time.Minute)
+		if err != nil {
+			t.Fatalf("NewMagicLinkToken: %v", err)
+		}
+		if err = ms.Create(ctx, tok); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		got, err := ms.GetBySessionToken(ctx, tok.SessionToken)
+		if err != nil {
+			t.Fatalf("GetBySessionToken: %v", err)
+		}
+		if got.Token != tok.Token {
+			t.Errorf("want token %q, got %q", tok.Token, got.Token)
+		}
+		if got.Code != tok.Code {
+			t.Errorf("want code %q, got %q", tok.Code, got.Code)
+		}
+		if got.SessionToken != tok.SessionToken {
+			t.Errorf("want session token %q, got %q", tok.SessionToken, got.SessionToken)
+		}
+	})
+
+	t.Run("unknown session token returns ErrNotFound", func(t *testing.T) {
+		_, err := ms.GetBySessionToken(ctx, "nonexistent-session-token")
 		if !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("want ErrNotFound, got %v", err)
 		}

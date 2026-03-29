@@ -196,8 +196,12 @@ type MagicLinkStore interface {
 	// Create persists a new MagicLinkToken.
 	Create(ctx context.Context, t domain.MagicLinkToken) error
 
-	// Get fetches a token by its value. Returns ErrNotFound if absent.
+	// Get fetches a token by its internal token value. Returns ErrNotFound if absent.
 	Get(ctx context.Context, token string) (domain.MagicLinkToken, error)
+
+	// GetBySessionToken fetches a token by its session token.
+	// Returns ErrNotFound if absent.
+	GetBySessionToken(ctx context.Context, sessionToken string) (domain.MagicLinkToken, error)
 
 	// MarkUsed atomically marks the token as used.
 	// Returns ErrNotFound if token does not exist or has already been used (single-use guarantee).

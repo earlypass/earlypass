@@ -100,15 +100,23 @@ CREATE TRIGGER accounts_updated_at
   BEFORE UPDATE ON accounts
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Magic link tokens for REST auth and MCP OAuth flow
+-- Magic link tokens for REST auth and MCP OAuth flow.
+-- Authentication is OTP-based: a 6-digit code (code) is emailed to the user
+-- and a session token (session_token) is stored in the requesting browser/client.
+-- The code can only be redeemed by presenting the matching session_token, so
+-- an attacker with only the emailed code cannot use it without also controlling
+-- the requesting session.
 CREATE TABLE magic_link_tokens (
-  token       TEXT        PRIMARY KEY,
-  email       TEXT        NOT NULL,
-  oauth_state JSONB,
-  expires_at  TIMESTAMPTZ NOT NULL,
-  used_at     TIMESTAMPTZ
+  token         TEXT        PRIMARY KEY,
+  code          TEXT        NOT NULL DEFAULT '',
+  session_token TEXT        NOT NULL DEFAULT '',
+  email         TEXT        NOT NULL,
+  oauth_state   JSONB,
+  expires_at    TIMESTAMPTZ NOT NULL,
+  used_at       TIMESTAMPTZ
 );
 CREATE INDEX idx_magic_link_tokens_email ON magic_link_tokens(email);
+CREATE INDEX idx_magic_link_tokens_session ON magic_link_tokens(session_token);
 
 -- key_hash stores SHA-256 hex of the raw key (not bcrypt)
 CREATE TABLE account_api_keys (

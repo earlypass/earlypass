@@ -1,13 +1,15 @@
-Your EarlyPass sign-in link
-===========================
+Your EarlyPass sign-in code
+==========================
 
 Hi there,
 
-Click the link below to sign in to your EarlyPass account. No password needed.
+Use the code below to sign in to your EarlyPass account.
+Enter it on the page where you requested it.
 
-Sign in: {{.VerifyURL}}
+  {{.OTPCode}}
 
-This link expires in 15 minutes and can only be used once.
+This code expires in 15 minutes and can only be used once.
+It only works from the browser where you requested it.
 If you didn't request this, you can safely ignore this email.
 
 ---

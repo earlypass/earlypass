@@ -26,6 +26,23 @@ func TestNewMagicLinkToken_Format(t *testing.T) {
 	if token.UsedAt != nil {
 		t.Error("expected nil UsedAt for new token")
 	}
+	// OTP code must be exactly 6 digits.
+	if len(token.Code) != 6 {
+		t.Errorf("expected 6-digit code, got %q (len=%d)", token.Code, len(token.Code))
+	}
+	for _, c := range token.Code {
+		if c < '0' || c > '9' {
+			t.Errorf("expected all digits in code, got %q", token.Code)
+			break
+		}
+	}
+	// Session token must be non-empty.
+	if token.SessionToken == "" {
+		t.Error("expected non-empty session token")
+	}
+	if len(token.SessionToken) < 40 {
+		t.Errorf("expected session token length >= 40, got %d", len(token.SessionToken))
+	}
 }
 
 func TestNewMagicLinkToken_Expiry(t *testing.T) {
@@ -112,9 +129,15 @@ func TestNewMagicLinkToken_Uniqueness(t *testing.T) {
 		t.Fatal(err)
 	}
 	if t1.Token == t2.Token {
-		t.Error("expected unique tokens for consecutive calls")
+		t.Error("expected unique internal tokens for consecutive calls")
+	}
+	if t1.SessionToken == t2.SessionToken {
+		t.Error("expected unique session tokens for consecutive calls")
 	}
 	if strings.Contains(t1.Token, "+") || strings.Contains(t1.Token, "/") {
 		t.Error("expected URL-safe (base64url) token without + or /")
+	}
+	if strings.Contains(t1.SessionToken, "+") || strings.Contains(t1.SessionToken, "/") {
+		t.Error("expected URL-safe (base64url) session token without + or /")
 	}
 }

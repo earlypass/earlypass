@@ -186,7 +186,7 @@ func (h *Handler) AuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// AuthorizePOST handles POST /oauth/authorize — accepts email, creates magic link.
+// AuthorizePOST handles POST /oauth/authorize — accepts email, creates OTP token.
 func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form data", http.StatusBadRequest)
@@ -205,14 +205,21 @@ func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In closed mode, only send magic links to existing accounts.
-	// Always show the check-inbox page regardless — no user enumeration.
+	// In closed mode, only send sign-in codes to existing accounts.
+	// Always show the code entry page regardless — no user enumeration.
 	if h.signupModeClosed {
 		if _, err := h.accounts.GetByEmail(r.Context(), emailAddr); err != nil {
 			h.logger.Info("closed mode: oauth authorize for unknown email", slog.String("email", emailAddr))
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			if tmplErr := checkInboxTmpl.Execute(w, nil); tmplErr != nil {
-				h.logger.Error("rendering check inbox page", slog.String("error", tmplErr.Error()))
+			if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
+				"ClientID":            clientID,
+				"RedirectURI":         redirectURI,
+				"CodeChallenge":       codeChallenge,
+				"CodeChallengeMethod": codeChallengeMethod,
+				"State":               state,
+				"Error":               "",
+			}); tmplErr != nil {
+				h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
 			}
 			return
 		}
@@ -227,7 +234,7 @@ func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if count > magicLinkRateLimit {
-		http.Error(w, "too many magic link requests — try again later", http.StatusTooManyRequests)
+		http.Error(w, "too many sign-in code requests — try again later", http.StatusTooManyRequests)
 		return
 	}
 
@@ -241,39 +248,188 @@ func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 
 	token, err := domain.NewMagicLinkToken(emailAddr, oauthState, magicLinkTTL)
 	if err != nil {
-		h.logger.Error("generating magic link token", slog.String("error", err.Error()))
+		h.logger.Error("generating OTP token", slog.String("error", err.Error()))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	if err = h.magicLinks.Create(r.Context(), token); err != nil {
-		h.logger.Error("storing magic link token", slog.String("error", err.Error()))
+		h.logger.Error("storing OTP token", slog.String("error", err.Error()))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	verifyURL := h.baseURL + "/api/v1/auth/verify?token=" + url.QueryEscape(token.Token)
-	htmlBody, _, err := email.MagicLinkEmail(verifyURL)
+	// Bind this sign-in attempt to the current browser by storing the session token
+	// in an HttpOnly cookie. The code can only be redeemed by a request that
+	// presents this cookie.
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthOTPSessionCookieName,
+		Value:    token.SessionToken,
+		Path:     "/oauth",
+		MaxAge:   900, // 15 minutes — matches the OTP TTL
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	htmlBody, _, err := email.MagicLinkEmail(token.Code)
 	if err != nil {
-		h.logger.Error("rendering magic link email", slog.String("error", err.Error()))
+		h.logger.Error("rendering sign-in code email", slog.String("error", err.Error()))
 	} else if h.emailOutbox != nil {
 		outboxEmail := domain.EmailOutbox{
 			ID:             uuid.New(),
 			IdempotencyKey: uuid.New(),
 			ToAddr:         emailAddr,
-			Subject:        "Your EarlyPass sign-in link",
+			Subject:        "Your EarlyPass sign-in code",
 			HTMLBody:       htmlBody,
 			CreatedAt:      time.Now().UTC(),
 		}
 		if createErr := h.emailOutbox.Create(r.Context(), outboxEmail); createErr != nil {
-			h.logger.Error("queuing magic link email", slog.String("error", createErr.Error()))
+			h.logger.Error("queuing sign-in code email", slog.String("error", createErr.Error()))
 		}
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err = checkInboxTmpl.Execute(w, nil); err != nil {
-		h.logger.Error("rendering check inbox page", slog.String("error", err.Error()))
+	if err = oauthCodeFormTmpl.Execute(w, map[string]string{
+		"ClientID":            clientID,
+		"RedirectURI":         redirectURI,
+		"CodeChallenge":       codeChallenge,
+		"CodeChallengeMethod": codeChallengeMethod,
+		"State":               state,
+		"Error":               "",
+	}); err != nil {
+		h.logger.Error("rendering oauth code form", slog.String("error", err.Error()))
 	}
+}
+
+// VerifyCodePOST handles POST /oauth/verify-code — validates OTP code and issues OAuth auth code.
+func (h *Handler) VerifyCodePOST(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	sessionCookie, err := r.Cookie(oauthOTPSessionCookieName)
+	if err != nil {
+		// No session cookie — redirect back to authorize.
+		http.Error(w, "session expired — please sign in again", http.StatusBadRequest)
+		return
+	}
+	sessionToken := sessionCookie.Value
+
+	otpCode := strings.TrimSpace(r.FormValue("code"))
+	clientID := r.FormValue("client_id")
+	redirectURI := r.FormValue("redirect_uri")
+	codeChallenge := r.FormValue("code_challenge")
+	codeChallengeMethod := r.FormValue("code_challenge_method")
+	state := r.FormValue("state")
+
+	tok, err := h.magicLinks.GetBySessionToken(r.Context(), sessionToken)
+	if err != nil {
+		http.Error(w, "session not found — please sign in again", http.StatusBadRequest)
+		return
+	}
+
+	if tok.IsExpired() {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
+			"ClientID": clientID, "RedirectURI": redirectURI,
+			"CodeChallenge": codeChallenge, "CodeChallengeMethod": codeChallengeMethod,
+			"State": state, "Error": "This code has expired. Please sign in again.",
+		}); tmplErr != nil {
+			h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
+		}
+		return
+	}
+	if tok.IsUsed() {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
+			"ClientID": clientID, "RedirectURI": redirectURI,
+			"CodeChallenge": codeChallenge, "CodeChallengeMethod": codeChallengeMethod,
+			"State": state, "Error": "This code has already been used. Please sign in again.",
+		}); tmplErr != nil {
+			h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
+		}
+		return
+	}
+	if tok.Code != otpCode {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
+			"ClientID": clientID, "RedirectURI": redirectURI,
+			"CodeChallenge": codeChallenge, "CodeChallengeMethod": codeChallengeMethod,
+			"State": state, "Error": "Incorrect code. Please try again.",
+		}); tmplErr != nil {
+			h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
+		}
+		return
+	}
+
+	now := time.Now().UTC()
+	if err = h.magicLinks.MarkUsed(r.Context(), tok.Token, now); err != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
+			"ClientID": clientID, "RedirectURI": redirectURI,
+			"CodeChallenge": codeChallenge, "CodeChallengeMethod": codeChallengeMethod,
+			"State": state, "Error": "This code has already been used. Please sign in again.",
+		}); tmplErr != nil {
+			h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
+		}
+		return
+	}
+
+	// Clear the OTP session cookie — it has served its purpose.
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthOTPSessionCookieName,
+		Value:    "",
+		Path:     "/oauth",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	var account domain.Account
+	if h.signupModeClosed {
+		var getErr error
+		account, getErr = h.accounts.GetByEmail(r.Context(), tok.Email)
+		if getErr != nil {
+			http.Error(w, "account not found — this instance is invite-only", http.StatusForbidden)
+			return
+		}
+	} else {
+		var createErr error
+		account, _, createErr = h.accounts.GetOrCreateByEmail(r.Context(), tok.Email)
+		if createErr != nil {
+			h.logger.Error("getting or creating account", slog.String("error", createErr.Error()))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Use the OAuth state from the token (set during AuthorizePOST).
+	oauth := tok.OAuthState
+	if oauth == nil {
+		http.Error(w, "invalid oauth state", http.StatusBadRequest)
+		return
+	}
+
+	code, codeErr := domain.NewOAuthAuthorizationCode(
+		account.ID, oauth.ClientID, oauth.RedirectURI,
+		oauth.CodeChallenge, oauth.CodeChallengeMethod,
+		"campaigns:read campaigns:write",
+		oauthCodeTTL,
+	)
+	if codeErr != nil {
+		h.logger.Error("generating oauth code", slog.String("error", codeErr.Error()))
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if storeErr := h.oauthStore.CreateCode(r.Context(), code); storeErr != nil {
+		h.logger.Error("storing oauth code", slog.String("error", storeErr.Error()))
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	redirectURL := oauth.RedirectURI + "?code=" + url.QueryEscape(code.Code) + "&state=" + url.QueryEscape(oauth.State)
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 // tokenRequest is the body for POST /oauth/token.
@@ -416,7 +572,10 @@ func writeOAuthError(w http.ResponseWriter, errCode, description string) {
 	})
 }
 
-// authorizeFormTmpl is the HTML form for the OAuth authorize flow.
+// oauthOTPSessionCookieName is the cookie used to bind the OAuth OTP to the requesting session.
+const oauthOTPSessionCookieName = "ep_oauth_otp_session"
+
+// authorizeFormTmpl is the HTML form for the OAuth authorize flow (email input).
 var authorizeFormTmpl = template.Must(template.New("authorize").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -443,7 +602,7 @@ var authorizeFormTmpl = template.Must(template.New("authorize").Parse(`<!DOCTYPE
 <div class="card">
   <div class="logo"><img src="/assets/logo.svg" alt="EarlyPass"><span>EarlyPass</span></div>
   <h1>Sign in</h1>
-  <p>Enter your email to receive a sign-in link. No password required.</p>
+  <p>Enter your email to receive a 6-digit sign-in code. No password required.</p>
   <form method="POST" action="/oauth/authorize">
     <input type="hidden" name="client_id" value="{{.ClientID}}">
     <input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">
@@ -452,37 +611,53 @@ var authorizeFormTmpl = template.Must(template.New("authorize").Parse(`<!DOCTYPE
     <input type="hidden" name="state" value="{{.State}}">
     <label for="email">Email address</label>
     <input type="email" id="email" name="email" placeholder="you@example.com" required autofocus>
-    <button type="submit">Send sign-in link</button>
+    <button type="submit">Send sign-in code</button>
   </form>
 </div>
 </body>
 </html>`))
 
-// checkInboxTmpl is the HTML page shown after submitting the email.
-var checkInboxTmpl = template.Must(template.New("check-inbox").Parse(`<!DOCTYPE html>
+// oauthCodeFormTmpl is the HTML form that prompts the user to enter their 6-digit OTP code.
+// It carries the OAuth parameters as hidden fields so they survive the POST to /oauth/verify-code.
+var oauthCodeFormTmpl = template.Must(template.New("oauth-code").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Check your inbox — EarlyPass</title>
+<title>Enter sign-in code — EarlyPass</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.1); padding: 48px 40px; max-width: 400px; width: 100%; text-align: center; }
-  .icon { font-size: 48px; margin-bottom: 16px; }
-  .logo { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 16px; }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.1); padding: 48px 40px; max-width: 400px; width: 100%; }
+  .logo { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .logo img { height: 28px; }
   .logo span { font-size: 18px; font-weight: 700; color: #6366f1; }
   h1 { font-size: 20px; font-weight: 600; color: #111827; margin: 0 0 8px; }
-  p { color: #6b7280; font-size: 14px; margin: 0; line-height: 1.6; }
+  p { color: #6b7280; font-size: 14px; margin: 0 0 20px; line-height: 1.6; }
+  label { display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 6px; }
+  input[type=text] { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 28px; font-weight: 700; letter-spacing: 12px; text-align: center; outline: none; }
+  input[type=text]:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+  button { width: 100%; background: #6366f1; color: #fff; border: none; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 16px; }
+  button:hover { background: #4f46e5; }
+  .error { color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 12px; margin-bottom: 16px; font-size: 14px; }
 </style>
 </head>
 <body>
 <div class="card">
   <div class="logo"><img src="/assets/logo.svg" alt="EarlyPass"><span>EarlyPass</span></div>
-  <div class="icon">&#128231;</div>
   <h1>Check your inbox</h1>
-  <p>We sent a sign-in link to your email address.<br>Click the link in the email to continue.<br><br>The link expires in 15 minutes.</p>
+  <p>We sent a 6-digit sign-in code to your email. Enter it below — the code expires in 15 minutes and only works in this browser.</p>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  <form method="POST" action="/oauth/verify-code">
+    <input type="hidden" name="client_id" value="{{.ClientID}}">
+    <input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">
+    <input type="hidden" name="code_challenge" value="{{.CodeChallenge}}">
+    <input type="hidden" name="code_challenge_method" value="{{.CodeChallengeMethod}}">
+    <input type="hidden" name="state" value="{{.State}}">
+    <label for="code">Sign-in code</label>
+    <input type="text" id="code" name="code" placeholder="000000" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" required autofocus autocomplete="one-time-code">
+    <button type="submit">Sign in</button>
+  </form>
 </div>
 </body>
 </html>`))

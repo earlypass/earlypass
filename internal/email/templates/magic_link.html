@@ -1,8 +1,10 @@
-{{define "title"}}Your EarlyPass sign-in link{{end}}
+{{define "title"}}Your EarlyPass sign-in code{{end}}
 {{define "content"}}
   <p>Hi there,</p>
-  <p>Click the button below to sign in to your EarlyPass account. No password needed.</p>
-  <p><a href="{{.VerifyURL}}" class="btn">Sign in to EarlyPass &rarr;</a></p>
-  <p style="color:#9ca3af;font-size:13px;">This link expires in 15 minutes and can only be used once. If you didn't request this, you can safely ignore this email.</p>
+  <p>Use the code below to sign in to your EarlyPass account. Enter it on the page where you requested it.</p>
+  <p style="text-align:center;margin:24px 0;">
+    <span style="display:inline-block;font-size:36px;font-weight:700;letter-spacing:8px;color:#1e293b;background:#f1f5f9;border-radius:8px;padding:12px 24px;">{{.OTPCode}}</span>
+  </p>
+  <p style="color:#9ca3af;font-size:13px;">This code expires in 15 minutes and can only be used once. It only works from the browser where you requested it. If you didn't request this, you can safely ignore this email.</p>
 {{end}}
-{{define "footer_content"}}Sent by EarlyPass &middot; <a href="{{.VerifyURL}}" style="color:{{.AccentColor}};">{{.VerifyURL}}</a>{{end}}
+{{define "footer_content"}}Sent by EarlyPass{{end}}

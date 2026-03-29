@@ -51,7 +51,7 @@ func EmailPreviewHandler(w http.ResponseWriter, r *http.Request) {
 	case "referral":
 		htmlBody, _, err = emailTemplates.ReferralNotificationEmail(campaignName, "Alex", exampleRefLink, 5, 37)
 	case "magic_link":
-		htmlBody, _, err = emailTemplates.MagicLinkEmail(exampleURL)
+		htmlBody, _, err = emailTemplates.MagicLinkEmail("123456")
 	case "invite":
 		htmlBody, _, err = emailTemplates.InviteEmail(campaignName, productURL, "")
 	default:

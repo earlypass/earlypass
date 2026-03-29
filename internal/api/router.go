@@ -270,6 +270,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /oauth/register", oauthHandler.Register)
 	mux.HandleFunc("GET /oauth/authorize", oauthHandler.AuthorizeGET)
 	mux.HandleFunc("POST /oauth/authorize", oauthHandler.AuthorizePOST)
+	mux.HandleFunc("POST /oauth/verify-code", oauthHandler.VerifyCodePOST)
 	mux.HandleFunc("POST /oauth/token", oauthHandler.Token)
 
 	// Legacy redirects — preserve backward compatibility for old paths.

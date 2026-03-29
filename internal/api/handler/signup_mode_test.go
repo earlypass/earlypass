@@ -77,6 +77,15 @@ func (s *stubMagicLinkStore) Get(_ context.Context, token string) (domain.MagicL
 	return domain.MagicLinkToken{}, store.ErrNotFound
 }
 
+func (s *stubMagicLinkStore) GetBySessionToken(_ context.Context, sessionToken string) (domain.MagicLinkToken, error) {
+	for _, t := range s.tokens {
+		if t.SessionToken == sessionToken {
+			return t, nil
+		}
+	}
+	return domain.MagicLinkToken{}, store.ErrNotFound
+}
+
 func (s *stubMagicLinkStore) MarkUsed(_ context.Context, token string, at time.Time) error {
 	if t, ok := s.tokens[token]; ok {
 		t.UsedAt = &at
@@ -308,7 +317,10 @@ func TestVerifyMagicLink_OpenMode_CreatesAccount(t *testing.T) {
 	srv := newSignupModeServer(accounts, magicLinks, &stubEmailOutbox{}, false)
 
 	resp, err := srv.VerifyMagicLink(context.Background(), generated.VerifyMagicLinkRequestObject{
-		Params: generated.VerifyMagicLinkParams{Token: tok.Token},
+		Body: &generated.MagicLinkVerifyRequest{
+			SessionToken: tok.SessionToken,
+			Code:         tok.Code,
+		},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -343,7 +355,10 @@ func TestVerifyMagicLink_ClosedMode_RejectsUnknownAccount(t *testing.T) {
 	srv := newSignupModeServer(accounts, magicLinks, &stubEmailOutbox{}, true)
 
 	resp, err := srv.VerifyMagicLink(context.Background(), generated.VerifyMagicLinkRequestObject{
-		Params: generated.VerifyMagicLinkParams{Token: tok.Token},
+		Body: &generated.MagicLinkVerifyRequest{
+			SessionToken: tok.SessionToken,
+			Code:         tok.Code,
+		},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -376,7 +391,10 @@ func TestVerifyMagicLink_ClosedMode_AcceptsExistingAccount(t *testing.T) {
 	srv := newSignupModeServer(accounts, magicLinks, &stubEmailOutbox{}, true)
 
 	resp, err := srv.VerifyMagicLink(context.Background(), generated.VerifyMagicLinkRequestObject{
-		Params: generated.VerifyMagicLinkParams{Token: tok.Token},
+		Body: &generated.MagicLinkVerifyRequest{
+			SessionToken: tok.SessionToken,
+			Code:         tok.Code,
+		},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
