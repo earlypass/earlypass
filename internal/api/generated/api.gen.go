@@ -331,23 +331,6 @@ type LeaderboardResponse struct {
 	Entries []LeaderboardEntry `json:"entries"`
 }
 
-// MagicLinkRequest defines model for MagicLinkRequest.
-type MagicLinkRequest struct {
-	Email openapi_types.Email `json:"email"`
-}
-
-// MagicLinkResponse defines model for MagicLinkResponse.
-type MagicLinkResponse struct {
-	Message *string `json:"message,omitempty"`
-}
-
-// MagicLinkVerifyResponse defines model for MagicLinkVerifyResponse.
-type MagicLinkVerifyResponse struct {
-	Account *Account `json:"account,omitempty"`
-	ApiKey  *string  `json:"api_key,omitempty"`
-	Note    *string  `json:"note,omitempty"`
-}
-
 // Problem RFC 7807 Problem Details
 type Problem struct {
 	Detail   *string `json:"detail,omitempty"`
@@ -355,6 +338,35 @@ type Problem struct {
 	Status   int     `json:"status"`
 	Title    string  `json:"title"`
 	Type     string  `json:"type"`
+}
+
+// SignInCodeRequest defines model for SignInCodeRequest.
+type SignInCodeRequest struct {
+	Email openapi_types.Email `json:"email"`
+}
+
+// SignInCodeResponse defines model for SignInCodeResponse.
+type SignInCodeResponse struct {
+	Message *string `json:"message,omitempty"`
+
+	// SessionToken Opaque token that binds this auth attempt to the requesting client. Must be passed to POST /api/v1/auth/verify along with the emailed code.
+	SessionToken *string `json:"session_token,omitempty"`
+}
+
+// SignInCodeVerifyRequest defines model for SignInCodeVerifyRequest.
+type SignInCodeVerifyRequest struct {
+	// Code The 6-digit OTP code received via email.
+	Code string `json:"code"`
+
+	// SessionToken The session_token returned by POST /api/v1/auth/signin.
+	SessionToken string `json:"session_token"`
+}
+
+// SignInCodeVerifyResponse defines model for SignInCodeVerifyResponse.
+type SignInCodeVerifyResponse struct {
+	Account *Account `json:"account,omitempty"`
+	ApiKey  *string  `json:"api_key,omitempty"`
+	Note    *string  `json:"note,omitempty"`
 }
 
 // Signup defines model for Signup.
@@ -463,11 +475,6 @@ type ListMyCampaignsParams struct {
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
-// VerifyMagicLinkParams defines parameters for VerifyMagicLink.
-type VerifyMagicLinkParams struct {
-	Token string `form:"token" json:"token"`
-}
-
 // CreateCampaignParams defines parameters for CreateCampaign.
 type CreateCampaignParams struct {
 	// IdempotencyKey Deduplication key for POST/PATCH requests. When provided, the server
@@ -537,8 +544,11 @@ type GetWidgetDataParams struct {
 // CreateAPIKeyJSONRequestBody defines body for CreateAPIKey for application/json ContentType.
 type CreateAPIKeyJSONRequestBody = CreateAPIKeyRequest
 
-// RequestMagicLinkJSONRequestBody defines body for RequestMagicLink for application/json ContentType.
-type RequestMagicLinkJSONRequestBody = MagicLinkRequest
+// RequestSignInCodeJSONRequestBody defines body for RequestSignInCode for application/json ContentType.
+type RequestSignInCodeJSONRequestBody = SignInCodeRequest
+
+// VerifySignInCodeJSONRequestBody defines body for VerifySignInCode for application/json ContentType.
+type VerifySignInCodeJSONRequestBody = SignInCodeVerifyRequest
 
 // CreateCampaignJSONRequestBody defines body for CreateCampaign for application/json ContentType.
 type CreateCampaignJSONRequestBody = CreateCampaignRequest
@@ -572,12 +582,12 @@ type ServerInterface interface {
 	// List campaigns owned by the current account
 	// (GET /api/v1/accounts/me/campaigns)
 	ListMyCampaigns(w http.ResponseWriter, r *http.Request, params ListMyCampaignsParams)
-	// Request a magic sign-in link
-	// (POST /api/v1/auth/magic-link)
-	RequestMagicLink(w http.ResponseWriter, r *http.Request)
-	// Verify a magic link token
-	// (GET /api/v1/auth/verify)
-	VerifyMagicLink(w http.ResponseWriter, r *http.Request, params VerifyMagicLinkParams)
+	// Request a sign-in code
+	// (POST /api/v1/auth/signin)
+	RequestSignInCode(w http.ResponseWriter, r *http.Request)
+	// Verify the OTP sign-in code
+	// (POST /api/v1/auth/verify)
+	VerifySignInCode(w http.ResponseWriter, r *http.Request)
 	// Create a campaign
 	// (POST /api/v1/campaigns)
 	CreateCampaign(w http.ResponseWriter, r *http.Request, params CreateCampaignParams)
@@ -674,15 +684,15 @@ func (_ Unimplemented) ListMyCampaigns(w http.ResponseWriter, r *http.Request, p
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Request a magic sign-in link
-// (POST /api/v1/auth/magic-link)
-func (_ Unimplemented) RequestMagicLink(w http.ResponseWriter, r *http.Request) {
+// Request a sign-in code
+// (POST /api/v1/auth/signin)
+func (_ Unimplemented) RequestSignInCode(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Verify a magic link token
-// (GET /api/v1/auth/verify)
-func (_ Unimplemented) VerifyMagicLink(w http.ResponseWriter, r *http.Request, params VerifyMagicLinkParams) {
+// Verify the OTP sign-in code
+// (POST /api/v1/auth/verify)
+func (_ Unimplemented) VerifySignInCode(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -947,11 +957,11 @@ func (siw *ServerInterfaceWrapper) ListMyCampaigns(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-// RequestMagicLink operation middleware
-func (siw *ServerInterfaceWrapper) RequestMagicLink(w http.ResponseWriter, r *http.Request) {
+// RequestSignInCode operation middleware
+func (siw *ServerInterfaceWrapper) RequestSignInCode(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RequestMagicLink(w, r)
+		siw.Handler.RequestSignInCode(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -961,31 +971,11 @@ func (siw *ServerInterfaceWrapper) RequestMagicLink(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
-// VerifyMagicLink operation middleware
-func (siw *ServerInterfaceWrapper) VerifyMagicLink(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params VerifyMagicLinkParams
-
-	// ------------- Required query parameter "token" -------------
-
-	if paramValue := r.URL.Query().Get("token"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "token"})
-		return
-	}
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "token", r.URL.Query(), &params.Token, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
-		return
-	}
+// VerifySignInCode operation middleware
+func (siw *ServerInterfaceWrapper) VerifySignInCode(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.VerifyMagicLink(w, r, params)
+		siw.Handler.VerifySignInCode(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1869,10 +1859,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/v1/accounts/me/campaigns", wrapper.ListMyCampaigns)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/api/v1/auth/magic-link", wrapper.RequestMagicLink)
+		r.Post(options.BaseURL+"/api/v1/auth/signin", wrapper.RequestSignInCode)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/api/v1/auth/verify", wrapper.VerifyMagicLink)
+		r.Post(options.BaseURL+"/api/v1/auth/verify", wrapper.VerifySignInCode)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/v1/campaigns", wrapper.CreateCampaign)
@@ -2120,39 +2110,39 @@ func (response ListMyCampaigns401ApplicationProblemPlusJSONResponse) VisitListMy
 	return json.NewEncoder(w).Encode(response)
 }
 
-type RequestMagicLinkRequestObject struct {
-	Body *RequestMagicLinkJSONRequestBody
+type RequestSignInCodeRequestObject struct {
+	Body *RequestSignInCodeJSONRequestBody
 }
 
-type RequestMagicLinkResponseObject interface {
-	VisitRequestMagicLinkResponse(w http.ResponseWriter) error
+type RequestSignInCodeResponseObject interface {
+	VisitRequestSignInCodeResponse(w http.ResponseWriter) error
 }
 
-type RequestMagicLink202JSONResponse MagicLinkResponse
+type RequestSignInCode202JSONResponse SignInCodeResponse
 
-func (response RequestMagicLink202JSONResponse) VisitRequestMagicLinkResponse(w http.ResponseWriter) error {
+func (response RequestSignInCode202JSONResponse) VisitRequestSignInCodeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type RequestMagicLink422ApplicationProblemPlusJSONResponse struct {
+type RequestSignInCode422ApplicationProblemPlusJSONResponse struct {
 	UnprocessableEntityApplicationProblemPlusJSONResponse
 }
 
-func (response RequestMagicLink422ApplicationProblemPlusJSONResponse) VisitRequestMagicLinkResponse(w http.ResponseWriter) error {
+func (response RequestSignInCode422ApplicationProblemPlusJSONResponse) VisitRequestSignInCodeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type RequestMagicLink429ApplicationProblemPlusJSONResponse struct {
+type RequestSignInCode429ApplicationProblemPlusJSONResponse struct {
 	TooManyRequestsApplicationProblemPlusJSONResponse
 }
 
-func (response RequestMagicLink429ApplicationProblemPlusJSONResponse) VisitRequestMagicLinkResponse(w http.ResponseWriter) error {
+func (response RequestSignInCode429ApplicationProblemPlusJSONResponse) VisitRequestSignInCodeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
 	w.Header().Set("X-RateLimit-Limit", fmt.Sprint(response.Headers.XRateLimitLimit))
@@ -2162,42 +2152,28 @@ func (response RequestMagicLink429ApplicationProblemPlusJSONResponse) VisitReque
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
-type VerifyMagicLinkRequestObject struct {
-	Params VerifyMagicLinkParams
+type VerifySignInCodeRequestObject struct {
+	Body *VerifySignInCodeJSONRequestBody
 }
 
-type VerifyMagicLinkResponseObject interface {
-	VisitVerifyMagicLinkResponse(w http.ResponseWriter) error
+type VerifySignInCodeResponseObject interface {
+	VisitVerifySignInCodeResponse(w http.ResponseWriter) error
 }
 
-type VerifyMagicLink200JSONResponse MagicLinkVerifyResponse
+type VerifySignInCode200JSONResponse SignInCodeVerifyResponse
 
-func (response VerifyMagicLink200JSONResponse) VisitVerifyMagicLinkResponse(w http.ResponseWriter) error {
+func (response VerifySignInCode200JSONResponse) VisitVerifySignInCodeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type VerifyMagicLink302ResponseHeaders struct {
-	Location string
-}
-
-type VerifyMagicLink302Response struct {
-	Headers VerifyMagicLink302ResponseHeaders
-}
-
-func (response VerifyMagicLink302Response) VisitVerifyMagicLinkResponse(w http.ResponseWriter) error {
-	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
-	w.WriteHeader(302)
-	return nil
-}
-
-type VerifyMagicLink400ApplicationProblemPlusJSONResponse struct {
+type VerifySignInCode400ApplicationProblemPlusJSONResponse struct {
 	BadRequestApplicationProblemPlusJSONResponse
 }
 
-func (response VerifyMagicLink400ApplicationProblemPlusJSONResponse) VisitVerifyMagicLinkResponse(w http.ResponseWriter) error {
+func (response VerifySignInCode400ApplicationProblemPlusJSONResponse) VisitVerifySignInCodeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
 
@@ -3139,12 +3115,12 @@ type StrictServerInterface interface {
 	// List campaigns owned by the current account
 	// (GET /api/v1/accounts/me/campaigns)
 	ListMyCampaigns(ctx context.Context, request ListMyCampaignsRequestObject) (ListMyCampaignsResponseObject, error)
-	// Request a magic sign-in link
-	// (POST /api/v1/auth/magic-link)
-	RequestMagicLink(ctx context.Context, request RequestMagicLinkRequestObject) (RequestMagicLinkResponseObject, error)
-	// Verify a magic link token
-	// (GET /api/v1/auth/verify)
-	VerifyMagicLink(ctx context.Context, request VerifyMagicLinkRequestObject) (VerifyMagicLinkResponseObject, error)
+	// Request a sign-in code
+	// (POST /api/v1/auth/signin)
+	RequestSignInCode(ctx context.Context, request RequestSignInCodeRequestObject) (RequestSignInCodeResponseObject, error)
+	// Verify the OTP sign-in code
+	// (POST /api/v1/auth/verify)
+	VerifySignInCode(ctx context.Context, request VerifySignInCodeRequestObject) (VerifySignInCodeResponseObject, error)
 	// Create a campaign
 	// (POST /api/v1/campaigns)
 	CreateCampaign(ctx context.Context, request CreateCampaignRequestObject) (CreateCampaignResponseObject, error)
@@ -3367,11 +3343,11 @@ func (sh *strictHandler) ListMyCampaigns(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-// RequestMagicLink operation middleware
-func (sh *strictHandler) RequestMagicLink(w http.ResponseWriter, r *http.Request) {
-	var request RequestMagicLinkRequestObject
+// RequestSignInCode operation middleware
+func (sh *strictHandler) RequestSignInCode(w http.ResponseWriter, r *http.Request) {
+	var request RequestSignInCodeRequestObject
 
-	var body RequestMagicLinkJSONRequestBody
+	var body RequestSignInCodeJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
 		return
@@ -3379,18 +3355,18 @@ func (sh *strictHandler) RequestMagicLink(w http.ResponseWriter, r *http.Request
 	request.Body = &body
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.RequestMagicLink(ctx, request.(RequestMagicLinkRequestObject))
+		return sh.ssi.RequestSignInCode(ctx, request.(RequestSignInCodeRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "RequestMagicLink")
+		handler = middleware(handler, "RequestSignInCode")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(RequestMagicLinkResponseObject); ok {
-		if err := validResponse.VisitRequestMagicLinkResponse(w); err != nil {
+	} else if validResponse, ok := response.(RequestSignInCodeResponseObject); ok {
+		if err := validResponse.VisitRequestSignInCodeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3398,25 +3374,30 @@ func (sh *strictHandler) RequestMagicLink(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// VerifyMagicLink operation middleware
-func (sh *strictHandler) VerifyMagicLink(w http.ResponseWriter, r *http.Request, params VerifyMagicLinkParams) {
-	var request VerifyMagicLinkRequestObject
+// VerifySignInCode operation middleware
+func (sh *strictHandler) VerifySignInCode(w http.ResponseWriter, r *http.Request) {
+	var request VerifySignInCodeRequestObject
 
-	request.Params = params
+	var body VerifySignInCodeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.VerifyMagicLink(ctx, request.(VerifyMagicLinkRequestObject))
+		return sh.ssi.VerifySignInCode(ctx, request.(VerifySignInCodeRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "VerifyMagicLink")
+		handler = middleware(handler, "VerifySignInCode")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(VerifyMagicLinkResponseObject); ok {
-		if err := validResponse.VisitVerifyMagicLinkResponse(w); err != nil {
+	} else if validResponse, ok := response.(VerifySignInCodeResponseObject); ok {
+		if err := validResponse.VisitVerifySignInCodeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

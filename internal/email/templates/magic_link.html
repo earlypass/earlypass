@@ -1,8 +1,0 @@
-{{define "title"}}Your EarlyPass sign-in link{{end}}
-{{define "content"}}
-  <p>Hi there,</p>
-  <p>Click the button below to sign in to your EarlyPass account. No password needed.</p>
-  <p><a href="{{.VerifyURL}}" class="btn">Sign in to EarlyPass &rarr;</a></p>
-  <p style="color:#9ca3af;font-size:13px;">This link expires in 15 minutes and can only be used once. If you didn't request this, you can safely ignore this email.</p>
-{{end}}
-{{define "footer_content"}}Sent by EarlyPass &middot; <a href="{{.VerifyURL}}" style="color:{{.AccentColor}};">{{.VerifyURL}}</a>{{end}}

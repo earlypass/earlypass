@@ -32,13 +32,13 @@ type Dashboard struct {
 	Signups      store.SignupStore
 	Webhooks     store.WebhookStore
 	AccountStore store.AccountStore
-	MagicLinks   store.MagicLinkStore
+	SignInTokens   store.SignInTokenStore
 	APIKeys      store.AccountAPIKeyStore
 	EmailOutbox  store.EmailOutboxStore
 	// BaseURL is the public base URL (no trailing slash) used to build verify links in emails.
 	BaseURL string
 	// SignupModeClosed restricts account creation to pre-existing accounts.
-	// When true, magic links are only sent to emails that already have an account.
+	// When true, sign-in codes are only sent to emails that already have an account.
 	SignupModeClosed bool
 	Logger           *slog.Logger
 }
@@ -84,9 +84,12 @@ const authPageCSS = `
   label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
   input[type=email] { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--surface); color: var(--text); outline: none; margin-bottom: 16px; }
   input[type=email]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px #e0e7ff; }
+  input[type=text].otp { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 28px; font-weight: 700; letter-spacing: 12px; text-align: center; background: var(--surface); color: var(--text); outline: none; margin-bottom: 16px; }
+  input[type=text].otp:focus { border-color: var(--primary); box-shadow: 0 0 0 3px #e0e7ff; }
   .btn { display: block; width: 100%; padding: 10px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; background: var(--primary); color: #fff; transition: background 0.1s; }
   .btn:hover { background: var(--primary-hover); }
   .note { font-size: 13px; color: var(--muted); margin-top: 16px; text-align: center; }
+  .error { font-size: 13px; color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 12px; margin-bottom: 16px; }
   a { color: var(--primary); }
   .icon { font-size: 48px; margin-bottom: 16px; text-align: center; }
 `
@@ -102,11 +105,11 @@ const loginHTMLOpen = `<!DOCTYPE html>
 <div class="header"><a class="logo" href="/"><img src="/assets/logo.svg" alt="" height="28"><span class="logo-text">EarlyPass</span></a></div>
 <div class="card">
   <h1>Sign in to EarlyPass</h1>
-  <p class="subtitle">Enter your email and we'll send you a magic sign-in link. No password required.</p>
+  <p class="subtitle">Enter your email and we'll send you a 6-digit sign-in code. No password required.</p>
   <form method="POST" action="/dashboard/login">
     <label for="email">Email address</label>
     <input type="email" id="email" name="email" required placeholder="you@example.com" autofocus>
-    <button class="btn" type="submit">Send magic link</button>
+    <button class="btn" type="submit">Send sign-in code</button>
   </form>
 </div>
 </body></html>`
@@ -122,31 +125,44 @@ const loginHTMLClosed = `<!DOCTYPE html>
 <div class="header"><a class="logo" href="/"><img src="/assets/logo.svg" alt="" height="28"><span class="logo-text">EarlyPass</span></a></div>
 <div class="card">
   <h1>Sign in to EarlyPass</h1>
-  <p class="subtitle">This instance is invite-only. Enter the email you were invited with and we'll send you a magic sign-in link.</p>
+  <p class="subtitle">This instance is invite-only. Enter the email you were invited with and we'll send you a 6-digit sign-in code.</p>
   <form method="POST" action="/dashboard/login">
     <label for="email">Email address</label>
     <input type="email" id="email" name="email" required placeholder="you@example.com" autofocus>
-    <button class="btn" type="submit">Send magic link</button>
+    <button class="btn" type="submit">Send sign-in code</button>
   </form>
 </div>
 </body></html>`
 
-const checkInboxHTML = `<!DOCTYPE html>
+// otpFormHTML returns the HTML page that prompts the user to enter the 6-digit sign-in code.
+// errMsg is shown above the input when non-empty (e.g. on a wrong-code retry).
+func otpFormHTML(errMsg string) string {
+	errBlock := ""
+	if errMsg != "" {
+		errBlock = `<div class="error">` + errMsg + `</div>`
+	}
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Check your inbox – EarlyPass</title>
+<title>Enter sign-in code – EarlyPass</title>
 <style>` + authPageCSS + `</style>
 </head>
 <body>
 <div class="header"><a class="logo" href="/"><img src="/assets/logo.svg" alt="" height="28"><span class="logo-text">EarlyPass</span></a></div>
-<div class="card" style="text-align:center">
-  <div class="icon">📬</div>
+<div class="card">
   <h1>Check your inbox</h1>
-  <p class="subtitle" style="margin-top:12px">We sent a sign-in link to your email. Click it to continue — the link expires in 15 minutes.</p>
-  <p class="note" style="margin-top:24px"><a href="/dashboard/login">← Use a different email</a></p>
+  <p class="subtitle">We sent a 6-digit sign-in code to your email. Enter it below — the code expires in 15 minutes and only works in this browser.</p>
+  ` + errBlock + `
+  <form method="POST" action="/dashboard/verify">
+    <label for="code">Sign-in code</label>
+    <input type="text" id="code" name="code" class="otp" required placeholder="000000" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autofocus autocomplete="one-time-code">
+    <button class="btn" type="submit">Sign in</button>
+  </form>
+  <p class="note"><a href="/dashboard/login">← Use a different email</a></p>
 </div>
 </body></html>`
+}
 
 const closedModeErrorHTML = `<!DOCTYPE html>
 <html lang="en">
@@ -164,6 +180,9 @@ const closedModeErrorHTML = `<!DOCTYPE html>
   <p class="note" style="margin-top:24px"><a href="/dashboard/login">← Try a different email</a></p>
 </div>
 </body></html>`
+
+// otpSessionCookieName is the cookie used to bind the OTP to the requesting browser session.
+const otpSessionCookieName = "ep_otp_session"
 
 // LoginGET handles GET /dashboard/login — renders the email input form.
 // Redirects already-authenticated users to the dashboard.
@@ -188,7 +207,7 @@ func (d *Dashboard) LogoutPOST(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/dashboard/login", http.StatusFound)
 }
 
-// LoginPOST handles POST /dashboard/login — validates email, creates magic link, sends email.
+// LoginPOST handles POST /dashboard/login — validates email, creates OTP, sends code email.
 func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", "invalid form data")
@@ -200,7 +219,7 @@ func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In closed mode, only send magic links to existing accounts.
+	// In closed mode, only send sign-in codes to existing accounts.
 	if d.SignupModeClosed {
 		if _, err := d.AccountStore.GetByEmail(r.Context(), emailAddr); err != nil {
 			d.Logger.InfoContext(r.Context(), "closed mode: dashboard login for unknown email", slog.String("email", emailAddr))
@@ -211,22 +230,35 @@ func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tok, err := domain.NewMagicLinkToken(emailAddr, nil, 15*time.Minute)
+	tok, err := domain.NewSignInToken(emailAddr, nil, 15*time.Minute)
 	if err != nil {
-		d.Logger.ErrorContext(r.Context(), "creating dashboard magic link token", slog.String("error", err.Error()))
+		d.Logger.ErrorContext(r.Context(), "creating sign-in token", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
 		return
 	}
-	if err = d.MagicLinks.Create(r.Context(), tok); err != nil {
-		d.Logger.ErrorContext(r.Context(), "storing dashboard magic link token", slog.String("error", err.Error()))
+	if err = d.SignInTokens.Create(r.Context(), tok); err != nil {
+		d.Logger.ErrorContext(r.Context(), "storing sign-in token", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
 		return
 	}
 
-	verifyURL := d.BaseURL + "/dashboard/verify?token=" + tok.Token
-	htmlBody, textBody, err := email.MagicLinkEmail(verifyURL)
+	// Bind this sign-in attempt to the current browser by storing the session token
+	// in an HttpOnly cookie. The OTP code can only be redeemed by a request that
+	// presents this cookie, preventing an attacker who only has the emailed code
+	// from using it outside this browser session.
+	http.SetCookie(w, &http.Cookie{
+		Name:     otpSessionCookieName,
+		Value:    tok.SessionToken,
+		Path:     "/dashboard",
+		MaxAge:   900, // 15 minutes — matches the OTP TTL
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   d.Secure,
+	})
+
+	htmlBody, textBody, err := email.SignInCodeEmail(tok.Code)
 	if err != nil {
-		d.Logger.ErrorContext(r.Context(), "rendering magic link email", slog.String("error", err.Error()))
+		d.Logger.ErrorContext(r.Context(), "rendering sign-in code email", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
 		return
 	}
@@ -236,59 +268,121 @@ func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 			ID:             uuid.New(),
 			IdempotencyKey: uuid.New(),
 			ToAddr:         emailAddr,
-			Subject:        "Your EarlyPass dashboard sign-in link",
+			Subject:        "Your EarlyPass sign-in code",
 			HTMLBody:       htmlBody,
 			TextBody:       textBody,
 			CreatedAt:      time.Now().UTC(),
 		}
 		if createErr := d.EmailOutbox.Create(r.Context(), outboxEmail); createErr != nil {
-			d.Logger.WarnContext(r.Context(), "queuing dashboard magic link email",
+			d.Logger.WarnContext(r.Context(), "queuing sign-in code email",
 				slog.String("email", emailAddr),
 				slog.String("error", createErr.Error()),
 			)
-			// Do not reveal queue failure to the user — always show the check inbox page.
+			// Do not reveal queue failure to the user — always proceed to the code entry page.
 		}
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(checkInboxHTML))
+	http.Redirect(w, r, "/dashboard/verify", http.StatusSeeOther)
 }
 
-// VerifyGET handles GET /dashboard/verify?token=X — validates token, issues JWT cookie.
+// VerifyGET handles GET /dashboard/verify — shows the OTP code entry form.
+// The session cookie set during LoginPOST must be present; otherwise the user
+// is redirected to the login page.
 func (d *Dashboard) VerifyGET(w http.ResponseWriter, r *http.Request) {
-	tokenStr := r.URL.Query().Get("token")
-	if tokenStr == "" {
-		problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", "token parameter is required")
+	_, err := r.Cookie(otpSessionCookieName)
+	if err != nil {
+		// No session cookie — redirect back to login.
+		http.Redirect(w, r, "/dashboard/login", http.StatusFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(otpFormHTML("")))
+}
+
+// VerifyPOST handles POST /dashboard/verify — validates the OTP code and issues a JWT cookie.
+func (d *Dashboard) VerifyPOST(w http.ResponseWriter, r *http.Request) {
+	sessionCookie, err := r.Cookie(otpSessionCookieName)
+	if err != nil {
+		// No session cookie — code cannot be used outside the requesting browser.
+		http.Redirect(w, r, "/dashboard/login", http.StatusFound)
+		return
+	}
+	sessionToken := sessionCookie.Value
+	if sessionToken == "" {
+		// Empty cookie value is invalid — treat as missing session.
+		http.Redirect(w, r, "/dashboard/login", http.StatusFound)
 		return
 	}
 
-	tok, err := d.MagicLinks.Get(r.Context(), tokenStr)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", "invalid or unknown token")
+	if err = r.ParseForm(); err != nil {
+		problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", "invalid form data")
+		return
+	}
+	code := strings.TrimSpace(r.FormValue("code"))
+	if len(code) != 6 {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(otpFormHTML("Please enter the 6-digit code from your email.")))
+		return
+	}
+	for _, c := range code {
+		if c < '0' || c > '9' {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(otpFormHTML("The code must contain only digits.")))
 			return
 		}
-		d.Logger.ErrorContext(r.Context(), "fetching dashboard magic link token", slog.String("error", err.Error()))
+	}
+
+	tok, err := d.SignInTokens.GetBySessionToken(r.Context(), sessionToken)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			// Session not found — may have expired or already been used; restart.
+			http.Redirect(w, r, "/dashboard/login", http.StatusFound)
+			return
+		}
+		d.Logger.ErrorContext(r.Context(), "fetching OTP token by session", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
 		return
 	}
+
 	if tok.IsExpired() {
-		problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", "token has expired")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(otpFormHTML("This code has expired. <a href=\"/dashboard/login\">Request a new one.</a>")))
 		return
 	}
 	if tok.IsUsed() {
-		problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", "token has already been used")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(otpFormHTML("This code has already been used. <a href=\"/dashboard/login\">Request a new one.</a>")))
 		return
 	}
-	if err = d.MagicLinks.MarkUsed(r.Context(), tokenStr, time.Now().UTC()); err != nil {
+
+	if tok.Code != code {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(otpFormHTML("Incorrect code. Please try again.")))
+		return
+	}
+
+	if err = d.SignInTokens.MarkUsed(r.Context(), tok.Token, time.Now().UTC()); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", "token has already been used")
+			// Race: another request just used this token.
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(otpFormHTML("This code has already been used. <a href=\"/dashboard/login\">Request a new one.</a>")))
 			return
 		}
-		d.Logger.ErrorContext(r.Context(), "marking dashboard magic link token used", slog.String("error", err.Error()))
+		d.Logger.ErrorContext(r.Context(), "marking OTP token used", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
 		return
 	}
+
+	// Clear the OTP session cookie — it has served its purpose.
+	http.SetCookie(w, &http.Cookie{
+		Name:     otpSessionCookieName,
+		Value:    "",
+		Path:     "/dashboard",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   d.Secure,
+	})
 
 	var account domain.Account
 	if d.SignupModeClosed {
@@ -1213,10 +1307,11 @@ func (d *Dashboard) CreateCampaignJSON(w http.ResponseWriter, r *http.Request) {
 
 // Setup registers all dashboard routes on the provided chi router.
 func (d *Dashboard) Setup(r chi.Router) {
-	// Magic link login/verify/logout — no auth required
+	// OTP login/verify/logout — no auth required
 	r.Get("/dashboard/login", d.LoginGET)
 	r.Post("/dashboard/login", d.LoginPOST)
 	r.Get("/dashboard/verify", d.VerifyGET)
+	r.Post("/dashboard/verify", d.VerifyPOST)
 	r.Post("/dashboard/logout", d.LogoutPOST)
 
 	// Account home SPA at /dashboard/ — auth handled by the SPA (401 → redirect to login)

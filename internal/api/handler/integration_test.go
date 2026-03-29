@@ -124,7 +124,7 @@ func TestMain(m *testing.M) {
 type testServer struct {
 	*httptest.Server
 	signups    store.SignupStore
-	magicLinks store.MagicLinkStore
+	signInTokens store.SignInTokenStore
 	emails     *email.CapturingSender
 }
 
@@ -222,7 +222,7 @@ func newTestServerWithTrustedProxies(t *testing.T, trustedProxies []string) *tes
 		SignupStore:        sharedDB.Signups(),
 		WebhookStore:       sharedDB.Webhooks(),
 		AccountStore:       sharedDB.Accounts(),
-		MagicLinkStore:     sharedDB.MagicLinks(),
+		SignInTokenStore:     sharedDB.SignInTokens(),
 		AccountAPIKeyStore: sharedDB.AccountAPIKeys(),
 		OAuthStore:         sharedDB.OAuth(),
 		DBPinger:           sharedDB,
@@ -237,7 +237,7 @@ func newTestServerWithTrustedProxies(t *testing.T, trustedProxies []string) *tes
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)
 
-	return &testServer{Server: srv, signups: sharedDB.Signups(), magicLinks: sharedDB.MagicLinks(), emails: capturingSender}
+	return &testServer{Server: srv, signups: sharedDB.Signups(), signInTokens: sharedDB.SignInTokens(), emails: capturingSender}
 }
 
 // uniqueName appends a short UUID suffix to base to prevent slug collisions

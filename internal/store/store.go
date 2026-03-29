@@ -191,13 +191,17 @@ type AccountStore interface {
 	GetByEmail(ctx context.Context, email string) (domain.Account, error)
 }
 
-// MagicLinkStore manages magic link token persistence.
-type MagicLinkStore interface {
-	// Create persists a new MagicLinkToken.
-	Create(ctx context.Context, t domain.MagicLinkToken) error
+// SignInTokenStore manages sign-in token persistence.
+type SignInTokenStore interface {
+	// Create persists a new SignInToken.
+	Create(ctx context.Context, t domain.SignInToken) error
 
-	// Get fetches a token by its value. Returns ErrNotFound if absent.
-	Get(ctx context.Context, token string) (domain.MagicLinkToken, error)
+	// Get fetches a token by its internal token value. Returns ErrNotFound if absent.
+	Get(ctx context.Context, token string) (domain.SignInToken, error)
+
+	// GetBySessionToken fetches a token by its session token.
+	// Returns ErrNotFound if absent.
+	GetBySessionToken(ctx context.Context, sessionToken string) (domain.SignInToken, error)
 
 	// MarkUsed atomically marks the token as used.
 	// Returns ErrNotFound if token does not exist or has already been used (single-use guarantee).

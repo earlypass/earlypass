@@ -16,7 +16,7 @@ import (
 //   - verification
 //   - welcome
 //   - referral
-//   - magic_link
+//   - signin_code
 //   - invite
 //
 // Query parameters:
@@ -50,12 +50,12 @@ func EmailPreviewHandler(w http.ResponseWriter, r *http.Request) {
 		htmlBody, _, err = emailTemplates.WelcomeEmail(campaignName, exampleRefLink, 42)
 	case "referral":
 		htmlBody, _, err = emailTemplates.ReferralNotificationEmail(campaignName, "Alex", exampleRefLink, 5, 37)
-	case "magic_link":
-		htmlBody, _, err = emailTemplates.MagicLinkEmail(exampleURL)
+	case "signin_code":
+		htmlBody, _, err = emailTemplates.SignInCodeEmail("123456")
 	case "invite":
 		htmlBody, _, err = emailTemplates.InviteEmail(campaignName, productURL, "")
 	default:
-		http.Error(w, fmt.Sprintf("unknown template %q — valid: verification, welcome, referral, magic_link, invite", tmplName), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("unknown template %q — valid: verification, welcome, referral, signin_code, invite", tmplName), http.StatusBadRequest)
 		return
 	}
 

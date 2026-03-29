@@ -100,15 +100,23 @@ CREATE TRIGGER accounts_updated_at
   BEFORE UPDATE ON accounts
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Magic link tokens for REST auth and MCP OAuth flow
-CREATE TABLE magic_link_tokens (
-  token       TEXT        PRIMARY KEY,
-  email       TEXT        NOT NULL,
-  oauth_state JSONB,
-  expires_at  TIMESTAMPTZ NOT NULL,
-  used_at     TIMESTAMPTZ
+-- Sign-in tokens for REST auth and OAuth/MCP flow.
+-- Authentication is OTP-based: a 6-digit code (code) is emailed to the user
+-- and a session token (session_token) is stored in the requesting browser/client.
+-- The code can only be redeemed by presenting the matching session_token, so
+-- an attacker with only the emailed code cannot use it without also controlling
+-- the requesting session.
+CREATE TABLE signin_tokens (
+  token         TEXT        PRIMARY KEY,
+  code          TEXT        NOT NULL CHECK (code ~ '^[0-9]{6}$'),
+  session_token TEXT        NOT NULL CHECK (session_token <> ''),
+  email         TEXT        NOT NULL,
+  oauth_state   JSONB,
+  expires_at    TIMESTAMPTZ NOT NULL,
+  used_at       TIMESTAMPTZ
 );
-CREATE INDEX idx_magic_link_tokens_email ON magic_link_tokens(email);
+CREATE INDEX idx_signin_tokens_email ON signin_tokens(email);
+CREATE UNIQUE INDEX idx_signin_tokens_session ON signin_tokens(session_token);
 
 -- key_hash stores SHA-256 hex of the raw key (not bcrypt)
 CREATE TABLE account_api_keys (
@@ -192,7 +200,7 @@ ALTER TABLE campaigns DROP CONSTRAINT IF EXISTS campaigns_account_id_name_key;
 DROP TABLE IF EXISTS oauth_access_tokens;
 DROP TABLE IF EXISTS oauth_authorization_codes;
 DROP TABLE IF EXISTS account_api_keys;
-DROP TABLE IF EXISTS magic_link_tokens;
+DROP TABLE IF EXISTS signin_tokens;
 DROP TRIGGER IF EXISTS accounts_updated_at ON accounts;
 DROP TABLE IF EXISTS accounts;
 

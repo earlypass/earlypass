@@ -51,10 +51,15 @@ paths:
               schema:
                 type: string
 
-  /api/v1/auth/magic-link:
+  /api/v1/auth/signin:
     post:
-      operationId: requestMagicLink
-      summary: Request a magic sign-in link
+      operationId: requestSignInCode
+      summary: Request a sign-in code
+      description: |
+        Sends a 6-digit OTP code to the provided email address and returns a
+        `session_token` that must be presented alongside the code when calling
+        `POST /api/v1/auth/verify`. This session binding ensures the code can
+        only be redeemed by the client that originally requested it.
       tags:
         - auth
       security: []
@@ -63,45 +68,43 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/MagicLinkRequest"
+              $ref: "#/components/schemas/SignInCodeRequest"
       responses:
         "202":
-          description: Magic link sent (or would be sent if email exists)
+          description: Sign-in code sent (or would be sent if email exists). The `session_token` must be stored and passed to `POST /api/v1/auth/verify`.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MagicLinkResponse"
+                $ref: "#/components/schemas/SignInCodeResponse"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/auth/verify:
-    get:
-      operationId: verifyMagicLink
-      summary: Verify a magic link token
+    post:
+      operationId: verifySignInCode
+      summary: Verify the OTP sign-in code
+      description: |
+        Verifies the 6-digit code emailed to the user against the `session_token`
+        returned by `POST /api/v1/auth/signin`. Both must match the same
+        auth attempt. On success returns account info and a long-lived API key.
       tags:
         - auth
       security: []
-      parameters:
-        - name: token
-          in: query
-          required: true
-          schema:
-            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignInCodeVerifyRequest"
       responses:
         "200":
-          description: Token verified — returns account info and API key (REST flow only)
+          description: Code verified — returns account info and API key
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MagicLinkVerifyResponse"
-        "302":
-          description: OAuth flow redirect to client redirect_uri
-          headers:
-            Location:
-              schema:
-                type: string
+                $ref: "#/components/schemas/SignInCodeVerifyResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
 
@@ -727,7 +730,7 @@ components:
       description: |
         Account API key or OAuth access token.
         Pass it as a Bearer token: `Authorization: Bearer ep_acc_...`
-        Account API keys are created via magic link auth and scoped to an account.
+        Account API keys are created via sign-in code auth and scoped to an account.
 
   parameters:
     CampaignID:
@@ -1210,7 +1213,7 @@ components:
           items:
             $ref: "#/components/schemas/WebhookEndpoint"
 
-    MagicLinkRequest:
+    SignInCodeRequest:
       type: object
       required:
         - email
@@ -1219,13 +1222,33 @@ components:
           type: string
           format: email
 
-    MagicLinkResponse:
+    SignInCodeResponse:
       type: object
       properties:
         message:
           type: string
+        session_token:
+          type: string
+          description: Opaque token that binds this auth attempt to the requesting client. Must be passed to POST /api/v1/auth/verify along with the emailed code.
 
-    MagicLinkVerifyResponse:
+    SignInCodeVerifyRequest:
+      type: object
+      required:
+        - session_token
+        - code
+      properties:
+        session_token:
+          type: string
+          description: The session_token returned by POST /api/v1/auth/signin.
+          minLength: 40
+        code:
+          type: string
+          description: The 6-digit OTP code received via email.
+          pattern: "^[0-9]{6}$"
+          minLength: 6
+          maxLength: 6
+
+    SignInCodeVerifyResponse:
       type: object
       properties:
         account:

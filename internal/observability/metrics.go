@@ -29,7 +29,7 @@ type Metrics struct {
 
 	// Security / fraud
 	FraudBlocksTotal      metric.Int64Counter
-	MagicLinkRequestsTotal metric.Int64Counter
+	SignInRequestsTotal metric.Int64Counter
 
 	// Queues (gauges)
 	OutboxPending   metric.Int64Gauge
@@ -115,12 +115,12 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("fraud_blocks_total: %w", err)
 	}
 
-	magicLinks, err := meter.Int64Counter(
-		"auth_magic_link_requests_total",
-		metric.WithDescription("Magic link requests, labelled by result (sent/rate_limited)"),
+	signInRequests, err := meter.Int64Counter(
+		"auth_signin_requests_total",
+		metric.WithDescription("Sign-in code requests, labelled by result (sent/rate_limited)"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("auth_magic_link_requests_total: %w", err)
+		return nil, fmt.Errorf("auth_signin_requests_total: %w", err)
 	}
 
 	outboxPending, err := meter.Int64Gauge(
@@ -157,7 +157,7 @@ func NewMetrics() (*Metrics, error) {
 		EmailSentTotal:           emailSent,
 		WebhookDeliveriesTotal:   webhooks,
 		FraudBlocksTotal:         fraudBlocks,
-		MagicLinkRequestsTotal:   magicLinks,
+		SignInRequestsTotal:      signInRequests,
 		OutboxPending:            outboxPending,
 		WebhookPending:           webhookPending,
 		ActiveCampaigns:          activeCampaigns,
@@ -241,10 +241,10 @@ func (m *Metrics) RecordFraudBlock(ctx context.Context, reason string) {
 	)
 }
 
-// RecordMagicLinkRequest increments the magic link requests counter.
+// RecordSignInRequest increments the sign-in code requests counter.
 // result is "sent" or "rate_limited".
-func (m *Metrics) RecordMagicLinkRequest(ctx context.Context, result string) {
-	m.MagicLinkRequestsTotal.Add(ctx, 1,
+func (m *Metrics) RecordSignInRequest(ctx context.Context, result string) {
+	m.SignInRequestsTotal.Add(ctx, 1,
 		metric.WithAttributes(attrResult(result)),
 	)
 }
