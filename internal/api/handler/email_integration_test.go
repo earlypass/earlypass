@@ -129,13 +129,13 @@ func TestEmail_ReferralSendsNotification(t *testing.T) {
 	}
 }
 
-// TestEmail_MagicLinkAPI asserts that POST /api/v1/auth/magic-link sends a
-// styled magic link email.
-func TestEmail_MagicLinkAPI(t *testing.T) {
+// TestEmail_SignInCodeAPI asserts that POST /api/v1/auth/signin sends a
+// styled sign-in code email.
+func TestEmail_SignInCodeAPI(t *testing.T) {
 	ts := newTestServer(t)
 	ts.emails.Reset()
 
-	resp := ts.do(t, http.MethodPost, "/api/v1/auth/magic-link",
+	resp := ts.do(t, http.MethodPost, "/api/v1/auth/signin",
 		map[string]any{"email": "login@example.com"}, nil)
 	discard(resp)
 	if resp.StatusCode != http.StatusAccepted {
@@ -156,8 +156,8 @@ func TestEmail_MagicLinkAPI(t *testing.T) {
 	if !strings.Contains(e.HTML, "<!DOCTYPE html>") {
 		t.Error("HTML: want shared layout (<!DOCTYPE html>)")
 	}
-	if !strings.Contains(e.HTML, "Sign in to EarlyPass") {
-		t.Error("HTML: want magic link CTA text")
+	if !strings.Contains(e.HTML, "sign-in code") {
+		t.Error("HTML: want sign-in code text")
 	}
 	if !strings.Contains(e.HTML, "15 minutes") {
 		t.Error("HTML: want expiry notice")
@@ -168,7 +168,7 @@ func TestEmail_MagicLinkAPI(t *testing.T) {
 }
 
 // TestEmail_DashboardLogin asserts that POST /dashboard/login sends a styled
-// magic link email via the dashboard handler.
+// sign-in code email via the dashboard handler.
 func TestEmail_DashboardLogin(t *testing.T) {
 	ts := newTestServer(t)
 	ts.emails.Reset()
@@ -200,8 +200,8 @@ func TestEmail_DashboardLogin(t *testing.T) {
 	if !strings.Contains(e.HTML, "<!DOCTYPE html>") {
 		t.Error("HTML: want shared layout (<!DOCTYPE html>)")
 	}
-	if !strings.Contains(e.HTML, "Sign in to EarlyPass") {
-		t.Error("HTML: want magic link CTA text")
+	if !strings.Contains(e.HTML, "sign-in code") {
+		t.Error("HTML: want sign-in code text")
 	}
 }
 

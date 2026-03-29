@@ -73,9 +73,9 @@ func (db *DB) Accounts() *AccountStore {
 	return &AccountStore{pool: db.pool}
 }
 
-// MagicLinks returns the MagicLinkStore implementation.
-func (db *DB) MagicLinks() *MagicLinkStore {
-	return &MagicLinkStore{pool: db.pool}
+// SignInTokens returns the SignInTokenStore implementation.
+func (db *DB) SignInTokens() *SignInTokenStore {
+	return &SignInTokenStore{pool: db.pool}
 }
 
 // AccountAPIKeys returns the AccountAPIKeyStore implementation.

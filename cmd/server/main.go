@@ -126,7 +126,7 @@ func main() {
 		SignupStore:        db.Signups(),
 		WebhookStore:       db.Webhooks(),
 		AccountStore:       db.Accounts(),
-		MagicLinkStore:     db.MagicLinks(),
+		SignInTokenStore:     db.SignInTokens(),
 		AccountAPIKeyStore: db.AccountAPIKeys(),
 		OAuthStore:         db.OAuth(),
 		EmailOutboxStore:   emailOutboxStore,
@@ -162,8 +162,8 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				if err := db.MagicLinks().DeleteExpired(cleanupCtx); err != nil {
-					logger.Warn("cleanup: deleting expired magic link tokens", slog.String("error", err.Error()))
+				if err := db.SignInTokens().DeleteExpired(cleanupCtx); err != nil {
+					logger.Warn("cleanup: deleting expired sign-in tokens", slog.String("error", err.Error()))
 				}
 				if err := db.OAuth().DeleteExpiredTokens(cleanupCtx); err != nil {
 					logger.Warn("cleanup: deleting expired oauth tokens", slog.String("error", err.Error()))

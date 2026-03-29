@@ -256,7 +256,7 @@ All key decisions are in `DECISIONS.md`. Read it before writing any code. The bi
 - **Webhooks:** Direct HTTP dispatch, exponential backoff, 3 retries
 - **Access granting:** `InviteTopN` is a single atomic CTE (`UPDATE…RETURNING`) — no separate select+update. Invite emails are fire-and-forget goroutines (skipped silently if `EmailSender` is nil). `InviteLinkBase()` returns `InviteURL` if set, otherwise falls back to `ProductURL` for invite email links.
 - **Admin API:** Separate port (`ADMIN_PORT`, default 3001), authenticated via `ADMIN_API_KEY` bearer token. Intended for internal/ops use — never expose to public internet. Currently supports `POST /admin/v1/accounts` for provisioning accounts.
-- **Signup mode:** `SIGNUP_MODE=open` (default) allows anyone to create accounts. `SIGNUP_MODE=closed` restricts to pre-existing accounts only — magic links are silently dropped for unknown emails (no user enumeration). Use the admin API to provision accounts in closed mode.
+- **Signup mode:** `SIGNUP_MODE=open` (default) allows anyone to create accounts. `SIGNUP_MODE=closed` restricts to pre-existing accounts only — sign-in codes are silently dropped for unknown emails (no user enumeration). Use the admin API to provision accounts in closed mode.
 
 ---
 

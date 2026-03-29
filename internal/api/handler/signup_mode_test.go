@@ -56,37 +56,37 @@ func (s *stubAccountStore) GetByEmail(_ context.Context, email string) (domain.A
 	return domain.Account{}, store.ErrNotFound
 }
 
-// stubMagicLinkStore is an in-memory MagicLinkStore.
-type stubMagicLinkStore struct {
-	tokens map[string]domain.MagicLinkToken
+// stubSignInTokenStore is an in-memory SignInTokenStore.
+type stubSignInTokenStore struct {
+	tokens map[string]domain.SignInToken
 }
 
-func newStubMagicLinkStore() *stubMagicLinkStore {
-	return &stubMagicLinkStore{tokens: make(map[string]domain.MagicLinkToken)}
+func newStubSignInTokenStore() *stubSignInTokenStore {
+	return &stubSignInTokenStore{tokens: make(map[string]domain.SignInToken)}
 }
 
-func (s *stubMagicLinkStore) Create(_ context.Context, t domain.MagicLinkToken) error {
+func (s *stubSignInTokenStore) Create(_ context.Context, t domain.SignInToken) error {
 	s.tokens[t.Token] = t
 	return nil
 }
 
-func (s *stubMagicLinkStore) Get(_ context.Context, token string) (domain.MagicLinkToken, error) {
+func (s *stubSignInTokenStore) Get(_ context.Context, token string) (domain.SignInToken, error) {
 	if t, ok := s.tokens[token]; ok {
 		return t, nil
 	}
-	return domain.MagicLinkToken{}, store.ErrNotFound
+	return domain.SignInToken{}, store.ErrNotFound
 }
 
-func (s *stubMagicLinkStore) GetBySessionToken(_ context.Context, sessionToken string) (domain.MagicLinkToken, error) {
+func (s *stubSignInTokenStore) GetBySessionToken(_ context.Context, sessionToken string) (domain.SignInToken, error) {
 	for _, t := range s.tokens {
 		if t.SessionToken == sessionToken {
 			return t, nil
 		}
 	}
-	return domain.MagicLinkToken{}, store.ErrNotFound
+	return domain.SignInToken{}, store.ErrNotFound
 }
 
-func (s *stubMagicLinkStore) MarkUsed(_ context.Context, token string, at time.Time) error {
+func (s *stubSignInTokenStore) MarkUsed(_ context.Context, token string, at time.Time) error {
 	if t, ok := s.tokens[token]; ok {
 		t.UsedAt = &at
 		s.tokens[token] = t
@@ -95,7 +95,7 @@ func (s *stubMagicLinkStore) MarkUsed(_ context.Context, token string, at time.T
 	return store.ErrNotFound
 }
 
-func (s *stubMagicLinkStore) DeleteExpired(_ context.Context) error { return nil }
+func (s *stubSignInTokenStore) DeleteExpired(_ context.Context) error { return nil }
 
 // stubEmailOutbox captures queued emails.
 type stubEmailOutbox struct {
@@ -160,19 +160,19 @@ func (s stubRateLimiter) Incr(_ context.Context, _ string, _ time.Duration) (int
 
 // --- Helpers ---
 
-func newSignupModeServer(accounts *stubAccountStore, magicLinks *stubMagicLinkStore, outbox *stubEmailOutbox, closed bool) *handler.Server {
+func newSignupModeServer(accounts *stubAccountStore, signInTokens *stubSignInTokenStore, outbox *stubEmailOutbox, closed bool) *handler.Server {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return handler.NewServer(
 		nil,                       // campaigns
 		nil,                       // signups
 		nil,                       // webhooks
 		accounts,                  // accounts
-		magicLinks,                // magicLinks
+		signInTokens,                // signInTokens
 		&stubAccountAPIKeyStore{}, // accountAPIKeys
 		nil,                       // oauthStore
 		nil,                       // fraudLimiter
 		nil,                       // csrfTokenStore
-		stubRateLimiter{},         // magicLinkRateLimiter
+		stubRateLimiter{},         // signInRateLimiter
 		outbox,                    // emailOutbox
 		stubPinger{},              // dbPinger
 		stubPinger{},              // redisPinger
@@ -185,18 +185,18 @@ func newSignupModeServer(accounts *stubAccountStore, magicLinks *stubMagicLinkSt
 	)
 }
 
-// --- Tests: RequestMagicLink ---
+// --- Tests: RequestSignInCode ---
 
-func TestRequestMagicLink_OpenMode_SendsEmail(t *testing.T) {
+func TestRequestSignInCode_OpenMode_SendsEmail(t *testing.T) {
 	t.Parallel()
 
 	accounts := newStubAccountStore()
-	magicLinks := newStubMagicLinkStore()
+	signInTokens := newStubSignInTokenStore()
 	outbox := &stubEmailOutbox{}
-	srv := newSignupModeServer(accounts, magicLinks, outbox, false)
+	srv := newSignupModeServer(accounts, signInTokens, outbox, false)
 
-	resp, err := srv.RequestMagicLink(context.Background(), generated.RequestMagicLinkRequestObject{
-		Body: &generated.RequestMagicLinkJSONRequestBody{
+	resp, err := srv.RequestSignInCode(context.Background(), generated.RequestSignInCodeRequestObject{
+		Body: &generated.RequestSignInCodeJSONRequestBody{
 			Email: openapi_types.Email("new@example.com"),
 		},
 	})
@@ -205,7 +205,7 @@ func TestRequestMagicLink_OpenMode_SendsEmail(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	if visitErr := resp.VisitRequestMagicLinkResponse(rec); visitErr != nil {
+	if visitErr := resp.VisitRequestSignInCodeResponse(rec); visitErr != nil {
 		t.Fatalf("visit error: %v", visitErr)
 	}
 
@@ -222,16 +222,16 @@ func TestRequestMagicLink_OpenMode_SendsEmail(t *testing.T) {
 	}
 }
 
-func TestRequestMagicLink_ClosedMode_RejectsUnknownEmail(t *testing.T) {
+func TestRequestSignInCode_ClosedMode_RejectsUnknownEmail(t *testing.T) {
 	t.Parallel()
 
 	accounts := newStubAccountStore()
-	magicLinks := newStubMagicLinkStore()
+	signInTokens := newStubSignInTokenStore()
 	outbox := &stubEmailOutbox{}
-	srv := newSignupModeServer(accounts, magicLinks, outbox, true)
+	srv := newSignupModeServer(accounts, signInTokens, outbox, true)
 
-	resp, err := srv.RequestMagicLink(context.Background(), generated.RequestMagicLinkRequestObject{
-		Body: &generated.RequestMagicLinkJSONRequestBody{
+	resp, err := srv.RequestSignInCode(context.Background(), generated.RequestSignInCodeRequestObject{
+		Body: &generated.RequestSignInCodeJSONRequestBody{
 			Email: openapi_types.Email("unknown@example.com"),
 		},
 	})
@@ -240,7 +240,7 @@ func TestRequestMagicLink_ClosedMode_RejectsUnknownEmail(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	if visitErr := resp.VisitRequestMagicLinkResponse(rec); visitErr != nil {
+	if visitErr := resp.VisitRequestSignInCodeResponse(rec); visitErr != nil {
 		t.Fatalf("visit error: %v", visitErr)
 	}
 
@@ -254,13 +254,13 @@ func TestRequestMagicLink_ClosedMode_RejectsUnknownEmail(t *testing.T) {
 		t.Fatalf("expected 0 emails queued in closed mode for unknown email, got %d", len(outbox.emails))
 	}
 
-	// And no magic link token should be created.
-	if len(magicLinks.tokens) != 0 {
-		t.Fatalf("expected 0 magic link tokens in closed mode for unknown email, got %d", len(magicLinks.tokens))
+	// And no sign-in token should be created.
+	if len(signInTokens.tokens) != 0 {
+		t.Fatalf("expected 0 sign-in tokens in closed mode for unknown email, got %d", len(signInTokens.tokens))
 	}
 }
 
-func TestRequestMagicLink_ClosedMode_SendsForKnownEmail(t *testing.T) {
+func TestRequestSignInCode_ClosedMode_SendsForKnownEmail(t *testing.T) {
 	t.Parallel()
 
 	accounts := newStubAccountStore()
@@ -269,12 +269,12 @@ func TestRequestMagicLink_ClosedMode_SendsForKnownEmail(t *testing.T) {
 		ID: uuid.New(), Email: "known@example.com",
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	}
-	magicLinks := newStubMagicLinkStore()
+	signInTokens := newStubSignInTokenStore()
 	outbox := &stubEmailOutbox{}
-	srv := newSignupModeServer(accounts, magicLinks, outbox, true)
+	srv := newSignupModeServer(accounts, signInTokens, outbox, true)
 
-	resp, err := srv.RequestMagicLink(context.Background(), generated.RequestMagicLinkRequestObject{
-		Body: &generated.RequestMagicLinkJSONRequestBody{
+	resp, err := srv.RequestSignInCode(context.Background(), generated.RequestSignInCodeRequestObject{
+		Body: &generated.RequestSignInCodeJSONRequestBody{
 			Email: openapi_types.Email("known@example.com"),
 		},
 	})
@@ -283,7 +283,7 @@ func TestRequestMagicLink_ClosedMode_SendsForKnownEmail(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	if visitErr := resp.VisitRequestMagicLinkResponse(rec); visitErr != nil {
+	if visitErr := resp.VisitRequestSignInCodeResponse(rec); visitErr != nil {
 		t.Fatalf("visit error: %v", visitErr)
 	}
 
@@ -297,27 +297,27 @@ func TestRequestMagicLink_ClosedMode_SendsForKnownEmail(t *testing.T) {
 	}
 
 	// Magic link token should be created.
-	if len(magicLinks.tokens) != 1 {
-		t.Fatalf("expected 1 magic link token, got %d", len(magicLinks.tokens))
+	if len(signInTokens.tokens) != 1 {
+		t.Fatalf("expected 1 sign-in token, got %d", len(signInTokens.tokens))
 	}
 }
 
-// --- Tests: VerifyMagicLink ---
+// --- Tests: VerifySignInCode ---
 
-func TestVerifyMagicLink_OpenMode_CreatesAccount(t *testing.T) {
+func TestVerifySignInCode_OpenMode_CreatesAccount(t *testing.T) {
 	t.Parallel()
 
 	accounts := newStubAccountStore()
-	magicLinks := newStubMagicLinkStore()
+	signInTokens := newStubSignInTokenStore()
 
 	// Create a valid token.
-	tok, _ := domain.NewMagicLinkToken("new@example.com", nil, 15*time.Minute)
-	magicLinks.tokens[tok.Token] = tok
+	tok, _ := domain.NewSignInToken("new@example.com", nil, 15*time.Minute)
+	signInTokens.tokens[tok.Token] = tok
 
-	srv := newSignupModeServer(accounts, magicLinks, &stubEmailOutbox{}, false)
+	srv := newSignupModeServer(accounts, signInTokens, &stubEmailOutbox{}, false)
 
-	resp, err := srv.VerifyMagicLink(context.Background(), generated.VerifyMagicLinkRequestObject{
-		Body: &generated.MagicLinkVerifyRequest{
+	resp, err := srv.VerifySignInCode(context.Background(), generated.VerifySignInCodeRequestObject{
+		Body: &generated.SignInCodeVerifyRequest{
 			SessionToken: tok.SessionToken,
 			Code:         tok.Code,
 		},
@@ -327,7 +327,7 @@ func TestVerifyMagicLink_OpenMode_CreatesAccount(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	if visitErr := resp.VisitVerifyMagicLinkResponse(rec); visitErr != nil {
+	if visitErr := resp.VisitVerifySignInCodeResponse(rec); visitErr != nil {
 		t.Fatalf("visit error: %v", visitErr)
 	}
 
@@ -342,20 +342,20 @@ func TestVerifyMagicLink_OpenMode_CreatesAccount(t *testing.T) {
 	}
 }
 
-func TestVerifyMagicLink_ClosedMode_RejectsUnknownAccount(t *testing.T) {
+func TestVerifySignInCode_ClosedMode_RejectsUnknownAccount(t *testing.T) {
 	t.Parallel()
 
 	accounts := newStubAccountStore()
-	magicLinks := newStubMagicLinkStore()
+	signInTokens := newStubSignInTokenStore()
 
 	// Create a valid token for an email that has no account.
-	tok, _ := domain.NewMagicLinkToken("unknown@example.com", nil, 15*time.Minute)
-	magicLinks.tokens[tok.Token] = tok
+	tok, _ := domain.NewSignInToken("unknown@example.com", nil, 15*time.Minute)
+	signInTokens.tokens[tok.Token] = tok
 
-	srv := newSignupModeServer(accounts, magicLinks, &stubEmailOutbox{}, true)
+	srv := newSignupModeServer(accounts, signInTokens, &stubEmailOutbox{}, true)
 
-	resp, err := srv.VerifyMagicLink(context.Background(), generated.VerifyMagicLinkRequestObject{
-		Body: &generated.MagicLinkVerifyRequest{
+	resp, err := srv.VerifySignInCode(context.Background(), generated.VerifySignInCodeRequestObject{
+		Body: &generated.SignInCodeVerifyRequest{
 			SessionToken: tok.SessionToken,
 			Code:         tok.Code,
 		},
@@ -365,7 +365,7 @@ func TestVerifyMagicLink_ClosedMode_RejectsUnknownAccount(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	if visitErr := resp.VisitVerifyMagicLinkResponse(rec); visitErr != nil {
+	if visitErr := resp.VisitVerifySignInCodeResponse(rec); visitErr != nil {
 		t.Fatalf("visit error: %v", visitErr)
 	}
 
@@ -375,7 +375,7 @@ func TestVerifyMagicLink_ClosedMode_RejectsUnknownAccount(t *testing.T) {
 	}
 }
 
-func TestVerifyMagicLink_ClosedMode_AcceptsExistingAccount(t *testing.T) {
+func TestVerifySignInCode_ClosedMode_AcceptsExistingAccount(t *testing.T) {
 	t.Parallel()
 
 	accounts := newStubAccountStore()
@@ -383,15 +383,15 @@ func TestVerifyMagicLink_ClosedMode_AcceptsExistingAccount(t *testing.T) {
 		ID: uuid.New(), Email: "existing@example.com",
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	}
-	magicLinks := newStubMagicLinkStore()
+	signInTokens := newStubSignInTokenStore()
 
-	tok, _ := domain.NewMagicLinkToken("existing@example.com", nil, 15*time.Minute)
-	magicLinks.tokens[tok.Token] = tok
+	tok, _ := domain.NewSignInToken("existing@example.com", nil, 15*time.Minute)
+	signInTokens.tokens[tok.Token] = tok
 
-	srv := newSignupModeServer(accounts, magicLinks, &stubEmailOutbox{}, true)
+	srv := newSignupModeServer(accounts, signInTokens, &stubEmailOutbox{}, true)
 
-	resp, err := srv.VerifyMagicLink(context.Background(), generated.VerifyMagicLinkRequestObject{
-		Body: &generated.MagicLinkVerifyRequest{
+	resp, err := srv.VerifySignInCode(context.Background(), generated.VerifySignInCodeRequestObject{
+		Body: &generated.SignInCodeVerifyRequest{
 			SessionToken: tok.SessionToken,
 			Code:         tok.Code,
 		},
@@ -401,7 +401,7 @@ func TestVerifyMagicLink_ClosedMode_AcceptsExistingAccount(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	if visitErr := resp.VisitVerifyMagicLinkResponse(rec); visitErr != nil {
+	if visitErr := resp.VisitVerifySignInCodeResponse(rec); visitErr != nil {
 		t.Fatalf("visit error: %v", visitErr)
 	}
 

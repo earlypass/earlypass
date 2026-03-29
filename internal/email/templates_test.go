@@ -98,10 +98,10 @@ func TestInviteEmail_EmptyProductURL(t *testing.T) {
 	mustContain(t, "text", text, "Acme Launch")
 }
 
-func TestMagicLinkEmail(t *testing.T) {
+func TestSignInCodeEmail(t *testing.T) {
 	t.Parallel()
 
-	html, text, err := email.MagicLinkEmail("123456")
+	html, text, err := email.SignInCodeEmail("123456")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -131,8 +131,8 @@ func TestLayoutConsistency(t *testing.T) {
 		"invite": func() (string, string, error) {
 			return email.InviteEmail("Acme", "https://myapp.com", "")
 		},
-		"magic_link": func() (string, string, error) {
-			return email.MagicLinkEmail("123456")
+		"signin_code": func() (string, string, error) {
+			return email.SignInCodeEmail("123456")
 		},
 	}
 

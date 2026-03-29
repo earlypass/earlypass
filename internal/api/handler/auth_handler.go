@@ -15,41 +15,41 @@ import (
 )
 
 const (
-	magicLinkRateMax  = 3
-	magicLinkRateTTL  = 10 * time.Minute
-	magicLinkTokenTTL = 15 * time.Minute
+	signInRateMax  = 3
+	signInRateTTL  = 10 * time.Minute
+	signInTokenTTL = 15 * time.Minute
 )
 
-// RequestMagicLink handles POST /v1/auth/magic-link.
-// It generates a 6-digit OTP code, stores a new magic link token, emails the
+// RequestSignInCode handles POST /v1/auth/signin.
+// It generates a 6-digit OTP code, stores a new sign-in token, emails the
 // code to the user, and returns a session_token that the caller must present
 // together with the code when calling POST /v1/auth/verify.
-func (s *Server) RequestMagicLink(ctx context.Context, req generated.RequestMagicLinkRequestObject) (generated.RequestMagicLinkResponseObject, error) {
+func (s *Server) RequestSignInCode(ctx context.Context, req generated.RequestSignInCodeRequestObject) (generated.RequestSignInCodeResponseObject, error) {
 	if req.Body == nil {
-		return generated.RequestMagicLink422ApplicationProblemPlusJSONResponse{
+		return generated.RequestSignInCode422ApplicationProblemPlusJSONResponse{
 			UnprocessableEntityApplicationProblemPlusJSONResponse: problemUnprocessable("request body is required"),
 		}, nil
 	}
 
 	emailAddr := string(req.Body.Email)
 	if _, err := mail.ParseAddress(emailAddr); err != nil {
-		return generated.RequestMagicLink422ApplicationProblemPlusJSONResponse{
+		return generated.RequestSignInCode422ApplicationProblemPlusJSONResponse{
 			UnprocessableEntityApplicationProblemPlusJSONResponse: problemUnprocessable("invalid email address"),
 		}, nil
 	}
 
 	// Rate limit: max 3 requests per email per 10 minutes.
-	rateKey := "magic-link-rate:" + emailAddr
-	count, err := s.magicLinkRateLimiter.Incr(ctx, rateKey, magicLinkRateTTL)
+	rateKey := "signin-rate:" + emailAddr
+	count, err := s.signInRateLimiter.Incr(ctx, rateKey, signInRateTTL)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "magic link rate limit check", slog.String("error", err.Error()))
+		s.logger.ErrorContext(ctx, "sign-in rate limit check", slog.String("error", err.Error()))
 		return nil, fmt.Errorf("rate limit check: %w", err)
 	}
-	if count > magicLinkRateMax {
+	if count > signInRateMax {
 		if s.metrics != nil {
-			s.metrics.RecordMagicLinkRequest(ctx, "rate_limited")
+			s.metrics.RecordSignInRequest(ctx, "rate_limited")
 		}
-		return generated.RequestMagicLink429ApplicationProblemPlusJSONResponse{
+		return generated.RequestSignInCode429ApplicationProblemPlusJSONResponse{
 			TooManyRequestsApplicationProblemPlusJSONResponse: problemTooManyRequests("too many sign-in code requests — try again in 10 minutes"),
 		}, nil
 	}
@@ -61,31 +61,31 @@ func (s *Server) RequestMagicLink(ctx context.Context, req generated.RequestMagi
 	if s.signupModeClosed {
 		if _, err := s.accounts.GetByEmail(ctx, emailAddr); err != nil {
 			if s.metrics != nil {
-				s.metrics.RecordMagicLinkRequest(ctx, "closed_rejected")
+				s.metrics.RecordSignInRequest(ctx, "closed_rejected")
 			}
 			s.logger.InfoContext(ctx, "closed mode: sign-in code request for unknown email", slog.String("email", emailAddr))
 			// Generate a random-looking (but non-stored) session token so the
 			// response is structurally identical to a real one.
-			fakeToken, genErr := domain.NewMagicLinkToken(emailAddr, nil, magicLinkTokenTTL)
+			fakeToken, genErr := domain.NewSignInToken(emailAddr, nil, signInTokenTTL)
 			fakeSessionToken := ""
 			if genErr == nil {
 				fakeSessionToken = fakeToken.SessionToken
 			}
 			msg := "If an account exists for this email, a sign-in code has been sent."
-			return generated.RequestMagicLink202JSONResponse{
+			return generated.RequestSignInCode202JSONResponse{
 				Message:      &msg,
 				SessionToken: &fakeSessionToken,
 			}, nil
 		}
 	}
 
-	token, err := domain.NewMagicLinkToken(emailAddr, nil, magicLinkTokenTTL)
+	token, err := domain.NewSignInToken(emailAddr, nil, signInTokenTTL)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "generating OTP token", slog.String("error", err.Error()))
 		return nil, fmt.Errorf("generating token: %w", err)
 	}
 
-	if err = s.magicLinks.Create(ctx, token); err != nil {
+	if err = s.signInTokens.Create(ctx, token); err != nil {
 		s.logger.ErrorContext(ctx, "storing OTP token", slog.String("error", err.Error()))
 		return nil, fmt.Errorf("storing token: %w", err)
 	}
@@ -97,7 +97,7 @@ func (s *Server) RequestMagicLink(ctx context.Context, req generated.RequestMagi
 		)
 	}
 
-	htmlBody, textBody, renderErr := emailtemplates.MagicLinkEmail(token.Code)
+	htmlBody, textBody, renderErr := emailtemplates.SignInCodeEmail(token.Code)
 	if renderErr != nil {
 		s.logger.ErrorContext(ctx, "rendering sign-in code email", slog.String("error", renderErr.Error()))
 	} else if s.emailOutbox != nil {
@@ -116,22 +116,22 @@ func (s *Server) RequestMagicLink(ctx context.Context, req generated.RequestMagi
 	}
 
 	if s.metrics != nil {
-		s.metrics.RecordMagicLinkRequest(ctx, "sent")
+		s.metrics.RecordSignInRequest(ctx, "sent")
 	}
 	msg := "If an account exists for this email, a sign-in code has been sent."
 	sessionToken := token.SessionToken
-	return generated.RequestMagicLink202JSONResponse{
+	return generated.RequestSignInCode202JSONResponse{
 		Message:      &msg,
 		SessionToken: &sessionToken,
 	}, nil
 }
 
-// VerifyMagicLink handles POST /v1/auth/verify.
+// VerifySignInCode handles POST /v1/auth/verify.
 // It validates the session_token + 6-digit OTP code pair. On success it returns
 // account info and a long-lived API key.
-func (s *Server) VerifyMagicLink(ctx context.Context, req generated.VerifyMagicLinkRequestObject) (generated.VerifyMagicLinkResponseObject, error) {
+func (s *Server) VerifySignInCode(ctx context.Context, req generated.VerifySignInCodeRequestObject) (generated.VerifySignInCodeResponseObject, error) {
 	if req.Body == nil {
-		return generated.VerifyMagicLink400ApplicationProblemPlusJSONResponse{
+		return generated.VerifySignInCode400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: problemBadRequest("request body is required"),
 		}, nil
 	}
@@ -139,10 +139,10 @@ func (s *Server) VerifyMagicLink(ctx context.Context, req generated.VerifyMagicL
 	sessionToken := req.Body.SessionToken
 	otpCode := req.Body.Code
 
-	t, err := s.magicLinks.GetBySessionToken(ctx, sessionToken)
+	t, err := s.signInTokens.GetBySessionToken(ctx, sessionToken)
 	if err != nil {
 		if isNotFound(err) {
-			return generated.VerifyMagicLink400ApplicationProblemPlusJSONResponse{
+			return generated.VerifySignInCode400ApplicationProblemPlusJSONResponse{
 				BadRequestApplicationProblemPlusJSONResponse: problemBadRequest("invalid or expired session token"),
 			}, nil
 		}
@@ -151,27 +151,27 @@ func (s *Server) VerifyMagicLink(ctx context.Context, req generated.VerifyMagicL
 	}
 
 	if t.IsExpired() {
-		return generated.VerifyMagicLink400ApplicationProblemPlusJSONResponse{
+		return generated.VerifySignInCode400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: problemBadRequest("code expired — request a new one"),
 		}, nil
 	}
 	if t.IsUsed() {
-		return generated.VerifyMagicLink400ApplicationProblemPlusJSONResponse{
+		return generated.VerifySignInCode400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: problemBadRequest("code already used"),
 		}, nil
 	}
 	if t.Code != otpCode {
-		return generated.VerifyMagicLink400ApplicationProblemPlusJSONResponse{
+		return generated.VerifySignInCode400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: problemBadRequest("incorrect code"),
 		}, nil
 	}
 
 	// Atomically mark the token as used (single-use guarantee).
 	now := time.Now().UTC()
-	if err = s.magicLinks.MarkUsed(ctx, t.Token, now); err != nil {
+	if err = s.signInTokens.MarkUsed(ctx, t.Token, now); err != nil {
 		if isNotFound(err) {
 			// Race condition: another request already used this token.
-			return generated.VerifyMagicLink400ApplicationProblemPlusJSONResponse{
+			return generated.VerifySignInCode400ApplicationProblemPlusJSONResponse{
 				BadRequestApplicationProblemPlusJSONResponse: problemBadRequest("code already used"),
 			}, nil
 		}
@@ -185,7 +185,7 @@ func (s *Server) VerifyMagicLink(ctx context.Context, req generated.VerifyMagicL
 		account, getErr = s.accounts.GetByEmail(ctx, t.Email)
 		if getErr != nil {
 			// Account doesn't exist and closed mode — reject.
-			return generated.VerifyMagicLink400ApplicationProblemPlusJSONResponse{
+			return generated.VerifySignInCode400ApplicationProblemPlusJSONResponse{
 				BadRequestApplicationProblemPlusJSONResponse: problemBadRequest("account not found — this instance is invite-only"),
 			}, nil
 		}
@@ -215,7 +215,7 @@ func (s *Server) VerifyMagicLink(ctx context.Context, req generated.VerifyMagicL
 		Email:     &account.Email,
 		CreatedAt: &account.CreatedAt,
 	}
-	return generated.VerifyMagicLink200JSONResponse{
+	return generated.VerifySignInCode200JSONResponse{
 		Account: &apiAccountResp,
 		ApiKey:  &rawKey,
 		Note:    &note,

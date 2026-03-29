@@ -42,7 +42,7 @@ type Dependencies struct {
 	SignupStore        store.SignupStore
 	WebhookStore       store.WebhookStore
 	AccountStore       store.AccountStore
-	MagicLinkStore     store.MagicLinkStore
+	SignInTokenStore     store.SignInTokenStore
 	AccountAPIKeyStore store.AccountAPIKeyStore
 	OAuthStore         store.OAuthStore
 	RedisClient        *redis.Client
@@ -68,7 +68,7 @@ type Dependencies struct {
 	// Never set this in production.
 	DevMode bool
 	// SignupModeClosed restricts account creation to pre-existing accounts.
-	// When true, magic links are only sent to emails that already have an account.
+	// When true, sign-in codes are only sent to emails that already have an account.
 	SignupModeClosed bool
 	Logger           *slog.Logger
 }
@@ -85,9 +85,9 @@ var publicOperations = map[string]bool{
 	"GetLeaderboard": true,
 	"GetWidgetData":  true,
 	"GetCsrfToken":   true,
-	// Auth endpoints — no token required to request or verify a magic link.
-	"RequestMagicLink": true,
-	"VerifyMagicLink":  true,
+	// Auth endpoints — no token required to request or verify a sign-in code.
+	"RequestSignInCode": true,
+	"VerifySignInCode":  true,
 	// Invite token endpoints — no auth required; token itself is the credential.
 	"GetInviteToken":    true,
 	"RedeemInviteToken": true,
@@ -132,12 +132,12 @@ func NewRouter(deps Dependencies) http.Handler {
 		deps.SignupStore,
 		deps.WebhookStore,
 		deps.AccountStore,
-		deps.MagicLinkStore,
+		deps.SignInTokenStore,
 		deps.AccountAPIKeyStore,
 		deps.OAuthStore,
 		redisStore, // fraud.IPRateLimiter
 		redisStore, // handler.CSRFTokenStore
-		redisStore, // handler.MagicLinkRateLimiter
+		redisStore, // handler.SignInRateLimiter
 		deps.EmailOutboxStore,
 		deps.DBPinger,
 		redisPingerAdapter{deps.RedisClient},
@@ -220,7 +220,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		Signups:         deps.SignupStore,
 		Webhooks:        deps.WebhookStore,
 		AccountStore:    deps.AccountStore,
-		MagicLinks:      deps.MagicLinkStore,
+		SignInTokens:      deps.SignInTokenStore,
 		APIKeys:         deps.AccountAPIKeyStore,
 		EmailOutbox:     deps.EmailOutboxStore,
 		BaseURL:         deps.BaseURL,
@@ -255,7 +255,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	// so they follow RFC conventions (not /v1/ prefix).
 	oauthHandler := oauth.NewHandler(oauth.HandlerDeps{
 		Accounts:         deps.AccountStore,
-		MagicLinks:       deps.MagicLinkStore,
+		SignInTokens:       deps.SignInTokenStore,
 		OAuthStore:       deps.OAuthStore,
 		EmailOutbox:      deps.EmailOutboxStore,
 		RedisStore:       redisStore,
@@ -282,6 +282,10 @@ func NewRouter(deps Dependencies) http.Handler {
 	// /v1/* → /api/v1/* (301 permanent)
 	mux.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api"+r.URL.RequestURI(), http.StatusMovedPermanently)
+	})
+	// /api/v1/auth/magic-link → /api/v1/auth/signin (301 permanent — old path name)
+	mux.HandleFunc("POST /api/v1/auth/magic-link", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/v1/auth/signin", http.StatusMovedPermanently)
 	})
 
 	return middleware.CORS(mux)
@@ -478,6 +482,6 @@ func withCacheControl(h http.Handler, value string) http.Handler {
 var (
 	_ fraud.IPRateLimiter          = (*redisstore.Client)(nil)
 	_ handler.CSRFTokenStore       = (*redisstore.Client)(nil)
-	_ handler.MagicLinkRateLimiter = (*redisstore.Client)(nil)
+	_ handler.SignInRateLimiter = (*redisstore.Client)(nil)
 	_ handler.RedisPinger          = redisPingerAdapter{}
 )

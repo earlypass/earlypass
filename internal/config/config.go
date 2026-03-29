@@ -53,8 +53,8 @@ type Config struct {
 	AdminPort int
 
 	// SignupMode controls who can create new accounts.
-	// "open" (default): anyone can sign up via magic link.
-	// "closed": only pre-existing accounts receive magic links.
+	// "open" (default): anyone can sign up via email code.
+	// "closed": only pre-existing accounts receive sign-in codes.
 	SignupMode SignupMode
 }
 

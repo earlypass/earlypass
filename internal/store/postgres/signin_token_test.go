@@ -12,15 +12,15 @@ import (
 	"github.com/earlypass/earlypass/internal/store"
 )
 
-func TestMagicLinkStore_Create_Get(t *testing.T) {
+func TestSignInTokenStore_Create_Get(t *testing.T) {
 	db := testDB(t)
 	ctx := context.Background()
-	ms := db.MagicLinks()
+	ms := db.SignInTokens()
 
 	t.Run("create and get REST token", func(t *testing.T) {
-		tok, err := domain.NewMagicLinkToken(uniqueEmail("ml-rest"), nil, 15*time.Minute)
+		tok, err := domain.NewSignInToken(uniqueEmail("ml-rest"), nil, 15*time.Minute)
 		if err != nil {
-			t.Fatalf("NewMagicLinkToken: %v", err)
+			t.Fatalf("NewSignInToken: %v", err)
 		}
 		if err = ms.Create(ctx, tok); err != nil {
 			t.Fatalf("Create: %v", err)
@@ -57,9 +57,9 @@ func TestMagicLinkStore_Create_Get(t *testing.T) {
 			CodeChallengeMethod: "S256",
 			State:               "state-xyz",
 		}
-		tok, err := domain.NewMagicLinkToken(uniqueEmail("ml-oauth"), oauth, 15*time.Minute)
+		tok, err := domain.NewSignInToken(uniqueEmail("ml-oauth"), oauth, 15*time.Minute)
 		if err != nil {
-			t.Fatalf("NewMagicLinkToken: %v", err)
+			t.Fatalf("NewSignInToken: %v", err)
 		}
 		if err = ms.Create(ctx, tok); err != nil {
 			t.Fatalf("Create: %v", err)
@@ -87,15 +87,15 @@ func TestMagicLinkStore_Create_Get(t *testing.T) {
 	})
 }
 
-func TestMagicLinkStore_GetBySessionToken(t *testing.T) {
+func TestSignInTokenStore_GetBySessionToken(t *testing.T) {
 	db := testDB(t)
 	ctx := context.Background()
-	ms := db.MagicLinks()
+	ms := db.SignInTokens()
 
 	t.Run("returns token by session token", func(t *testing.T) {
-		tok, err := domain.NewMagicLinkToken(uniqueEmail("ml-session"), nil, 15*time.Minute)
+		tok, err := domain.NewSignInToken(uniqueEmail("ml-session"), nil, 15*time.Minute)
 		if err != nil {
-			t.Fatalf("NewMagicLinkToken: %v", err)
+			t.Fatalf("NewSignInToken: %v", err)
 		}
 		if err = ms.Create(ctx, tok); err != nil {
 			t.Fatalf("Create: %v", err)
@@ -123,13 +123,13 @@ func TestMagicLinkStore_GetBySessionToken(t *testing.T) {
 	})
 }
 
-func TestMagicLinkStore_MarkUsed(t *testing.T) {
+func TestSignInTokenStore_MarkUsed(t *testing.T) {
 	db := testDB(t)
 	ctx := context.Background()
-	ms := db.MagicLinks()
+	ms := db.SignInTokens()
 
 	t.Run("marks token as used", func(t *testing.T) {
-		tok, _ := domain.NewMagicLinkToken(uniqueEmail("ml-mark"), nil, 15*time.Minute)
+		tok, _ := domain.NewSignInToken(uniqueEmail("ml-mark"), nil, 15*time.Minute)
 		_ = ms.Create(ctx, tok)
 
 		now := time.Now().UTC()
@@ -143,7 +143,7 @@ func TestMagicLinkStore_MarkUsed(t *testing.T) {
 	})
 
 	t.Run("second MarkUsed returns ErrNotFound (single-use)", func(t *testing.T) {
-		tok, _ := domain.NewMagicLinkToken(uniqueEmail("ml-single"), nil, 15*time.Minute)
+		tok, _ := domain.NewSignInToken(uniqueEmail("ml-single"), nil, 15*time.Minute)
 		_ = ms.Create(ctx, tok)
 		_ = ms.MarkUsed(ctx, tok.Token, time.Now())
 
@@ -161,13 +161,13 @@ func TestMagicLinkStore_MarkUsed(t *testing.T) {
 	})
 }
 
-func TestMagicLinkStore_DeleteExpired(t *testing.T) {
+func TestSignInTokenStore_DeleteExpired(t *testing.T) {
 	db := testDB(t)
 	ctx := context.Background()
-	ms := db.MagicLinks()
+	ms := db.SignInTokens()
 
 	// Create an already-expired token by using a negative TTL.
-	tok, _ := domain.NewMagicLinkToken(uniqueEmail("ml-expired"), nil, -1*time.Second)
+	tok, _ := domain.NewSignInToken(uniqueEmail("ml-expired"), nil, -1*time.Second)
 	_ = ms.Create(ctx, tok)
 
 	if err := ms.DeleteExpired(ctx); err != nil {

@@ -32,13 +32,13 @@ type Dashboard struct {
 	Signups      store.SignupStore
 	Webhooks     store.WebhookStore
 	AccountStore store.AccountStore
-	MagicLinks   store.MagicLinkStore
+	SignInTokens   store.SignInTokenStore
 	APIKeys      store.AccountAPIKeyStore
 	EmailOutbox  store.EmailOutboxStore
 	// BaseURL is the public base URL (no trailing slash) used to build verify links in emails.
 	BaseURL string
 	// SignupModeClosed restricts account creation to pre-existing accounts.
-	// When true, magic links are only sent to emails that already have an account.
+	// When true, sign-in codes are only sent to emails that already have an account.
 	SignupModeClosed bool
 	Logger           *slog.Logger
 }
@@ -230,14 +230,14 @@ func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tok, err := domain.NewMagicLinkToken(emailAddr, nil, 15*time.Minute)
+	tok, err := domain.NewSignInToken(emailAddr, nil, 15*time.Minute)
 	if err != nil {
-		d.Logger.ErrorContext(r.Context(), "creating dashboard OTP token", slog.String("error", err.Error()))
+		d.Logger.ErrorContext(r.Context(), "creating sign-in token token", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
 		return
 	}
-	if err = d.MagicLinks.Create(r.Context(), tok); err != nil {
-		d.Logger.ErrorContext(r.Context(), "storing dashboard OTP token", slog.String("error", err.Error()))
+	if err = d.SignInTokens.Create(r.Context(), tok); err != nil {
+		d.Logger.ErrorContext(r.Context(), "storing sign-in token token", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
 		return
 	}
@@ -256,7 +256,7 @@ func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 		Secure:   d.Secure,
 	})
 
-	htmlBody, textBody, err := email.MagicLinkEmail(tok.Code)
+	htmlBody, textBody, err := email.SignInCodeEmail(tok.Code)
 	if err != nil {
 		d.Logger.ErrorContext(r.Context(), "rendering sign-in code email", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
@@ -274,7 +274,7 @@ func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:      time.Now().UTC(),
 		}
 		if createErr := d.EmailOutbox.Create(r.Context(), outboxEmail); createErr != nil {
-			d.Logger.WarnContext(r.Context(), "queuing dashboard sign-in code email",
+			d.Logger.WarnContext(r.Context(), "queuing sign-in code email",
 				slog.String("email", emailAddr),
 				slog.String("error", createErr.Error()),
 			)
@@ -327,7 +327,7 @@ func (d *Dashboard) VerifyPOST(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tok, err := d.MagicLinks.GetBySessionToken(r.Context(), sessionToken)
+	tok, err := d.SignInTokens.GetBySessionToken(r.Context(), sessionToken)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			// Session not found — may have expired or already been used; restart.
@@ -356,7 +356,7 @@ func (d *Dashboard) VerifyPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = d.MagicLinks.MarkUsed(r.Context(), tok.Token, time.Now().UTC()); err != nil {
+	if err = d.SignInTokens.MarkUsed(r.Context(), tok.Token, time.Now().UTC()); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			// Race: another request just used this token.
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")

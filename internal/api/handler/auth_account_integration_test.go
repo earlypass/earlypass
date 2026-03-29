@@ -15,11 +15,11 @@ import (
 
 // --- auth tests ---
 
-func TestRequestMagicLink(t *testing.T) {
+func TestRequestSignInCode(t *testing.T) {
 	ts := newTestServer(t)
 
 	t.Run("valid email returns 202", func(t *testing.T) {
-		resp := ts.do(t, http.MethodPost, "/api/v1/auth/magic-link",
+		resp := ts.do(t, http.MethodPost, "/api/v1/auth/signin",
 			map[string]string{"email": "valid@example.com"}, nil)
 		discard(resp)
 		if resp.StatusCode != http.StatusAccepted {
@@ -28,7 +28,7 @@ func TestRequestMagicLink(t *testing.T) {
 	})
 
 	t.Run("invalid email returns 400 or 422", func(t *testing.T) {
-		resp := ts.do(t, http.MethodPost, "/api/v1/auth/magic-link",
+		resp := ts.do(t, http.MethodPost, "/api/v1/auth/signin",
 			map[string]string{"email": "not-an-email"}, nil)
 		discard(resp)
 		// oapi-codegen validates email format at parse time → 400;
@@ -39,18 +39,18 @@ func TestRequestMagicLink(t *testing.T) {
 	})
 }
 
-func TestVerifyMagicLink_RESTFlow(t *testing.T) {
+func TestVerifySignInCode_RESTFlow(t *testing.T) {
 	ts := newTestServer(t)
 	ctx := context.Background()
 	email := "verify-rest-" + uuid.New().String()[:8] + "@example.com"
 
 	// Create token directly — simulates "user received code via email".
-	tok, err := domain.NewMagicLinkToken(email, nil, 15*time.Minute)
+	tok, err := domain.NewSignInToken(email, nil, 15*time.Minute)
 	if err != nil {
-		t.Fatalf("NewMagicLinkToken: %v", err)
+		t.Fatalf("NewSignInToken: %v", err)
 	}
-	if err = sharedDB.MagicLinks().Create(ctx, tok); err != nil {
-		t.Fatalf("Create magic link token: %v", err)
+	if err = sharedDB.SignInTokens().Create(ctx, tok); err != nil {
+		t.Fatalf("Create sign-in token: %v", err)
 	}
 
 	// Verify → should return 200 with API key.
@@ -90,7 +90,7 @@ func TestVerifyMagicLink_RESTFlow(t *testing.T) {
 	}
 }
 
-func TestVerifyMagicLink_Errors(t *testing.T) {
+func TestVerifySignInCode_Errors(t *testing.T) {
 	ts := newTestServer(t)
 	ctx := context.Background()
 
@@ -107,8 +107,8 @@ func TestVerifyMagicLink_Errors(t *testing.T) {
 
 	t.Run("expired token returns 400", func(t *testing.T) {
 		email := "expired-" + uuid.New().String()[:8] + "@example.com"
-		tok, _ := domain.NewMagicLinkToken(email, nil, -1*time.Second)
-		_ = sharedDB.MagicLinks().Create(ctx, tok)
+		tok, _ := domain.NewSignInToken(email, nil, -1*time.Second)
+		_ = sharedDB.SignInTokens().Create(ctx, tok)
 
 		resp := ts.do(t, http.MethodPost, "/api/v1/auth/verify", map[string]string{
 			"session_token": tok.SessionToken,
@@ -122,8 +122,8 @@ func TestVerifyMagicLink_Errors(t *testing.T) {
 
 	t.Run("wrong code returns 400", func(t *testing.T) {
 		email := "wrongcode-" + uuid.New().String()[:8] + "@example.com"
-		tok, _ := domain.NewMagicLinkToken(email, nil, 15*time.Minute)
-		_ = sharedDB.MagicLinks().Create(ctx, tok)
+		tok, _ := domain.NewSignInToken(email, nil, 15*time.Minute)
+		_ = sharedDB.SignInTokens().Create(ctx, tok)
 
 		// Use a code that is guaranteed to differ from the generated one
 		wrongCode := "000000"
@@ -142,9 +142,9 @@ func TestVerifyMagicLink_Errors(t *testing.T) {
 
 	t.Run("already-used token returns 400", func(t *testing.T) {
 		email := "used-" + uuid.New().String()[:8] + "@example.com"
-		tok, _ := domain.NewMagicLinkToken(email, nil, 15*time.Minute)
-		_ = sharedDB.MagicLinks().Create(ctx, tok)
-		_ = sharedDB.MagicLinks().MarkUsed(ctx, tok.Token, time.Now())
+		tok, _ := domain.NewSignInToken(email, nil, 15*time.Minute)
+		_ = sharedDB.SignInTokens().Create(ctx, tok)
+		_ = sharedDB.SignInTokens().MarkUsed(ctx, tok.Token, time.Now())
 
 		resp := ts.do(t, http.MethodPost, "/api/v1/auth/verify", map[string]string{
 			"session_token": tok.SessionToken,
@@ -318,12 +318,12 @@ func createAccountAndKey(t *testing.T) string {
 	ctx := context.Background()
 	email := "acct-" + uuid.New().String()[:8] + "@example.com"
 
-	tok, err := domain.NewMagicLinkToken(email, nil, 15*time.Minute)
+	tok, err := domain.NewSignInToken(email, nil, 15*time.Minute)
 	if err != nil {
-		t.Fatalf("NewMagicLinkToken: %v", err)
+		t.Fatalf("NewSignInToken: %v", err)
 	}
-	if err = sharedDB.MagicLinks().Create(ctx, tok); err != nil {
-		t.Fatalf("Create magic link: %v", err)
+	if err = sharedDB.SignInTokens().Create(ctx, tok); err != nil {
+		t.Fatalf("Create sign-in code: %v", err)
 	}
 
 	resp := ts.do(t, http.MethodPost, "/api/v1/auth/verify", map[string]string{

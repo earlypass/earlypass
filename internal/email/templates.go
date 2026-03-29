@@ -17,7 +17,7 @@ type templateData struct {
 	Email         string
 	FirstName     string       // referrer's first name for personalisation
 	VerifyURL     string       // verification link
-	OTPCode       string       // 6-digit sign-in code (magic link OTP flow)
+	OTPCode       string       // 6-digit sign-in code (sign-in OTP flow)
 	ReferralLink  string       // the signup's shareable referral URL
 	ReferralCount int          // how many referrals the signup has
 	Position      int          // effective queue position
@@ -69,10 +69,10 @@ func InviteEmail(campaignName, productURL, inviteLink string) (html, text string
 	})
 }
 
-// MagicLinkEmail returns the HTML and plain-text bodies for the magic sign-in code email.
+// SignInCodeEmail returns the HTML and plain-text bodies for the sign-in code email.
 // otpCode is the 6-digit code the user must enter on the page where they requested sign-in.
-func MagicLinkEmail(otpCode string) (html, text string, err error) {
-	return render("magic_link", templateData{
+func SignInCodeEmail(otpCode string) (html, text string, err error) {
+	return render("signin_code", templateData{
 		OTPCode: otpCode,
 	})
 }

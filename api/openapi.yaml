@@ -51,9 +51,9 @@ paths:
               schema:
                 type: string
 
-  /api/v1/auth/magic-link:
+  /api/v1/auth/signin:
     post:
-      operationId: requestMagicLink
+      operationId: requestSignInCode
       summary: Request a sign-in code
       description: |
         Sends a 6-digit OTP code to the provided email address and returns a
@@ -68,14 +68,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/MagicLinkRequest"
+              $ref: "#/components/schemas/SignInCodeRequest"
       responses:
         "202":
           description: Sign-in code sent (or would be sent if email exists). The `session_token` must be stored and passed to `POST /api/v1/auth/verify`.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MagicLinkResponse"
+                $ref: "#/components/schemas/SignInCodeResponse"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
         "429":
@@ -83,11 +83,11 @@ paths:
 
   /api/v1/auth/verify:
     post:
-      operationId: verifyMagicLink
+      operationId: verifySignInCode
       summary: Verify the OTP sign-in code
       description: |
         Verifies the 6-digit code emailed to the user against the `session_token`
-        returned by `POST /api/v1/auth/magic-link`. Both must match the same
+        returned by `POST /api/v1/auth/signin`. Both must match the same
         auth attempt. On success returns account info and a long-lived API key.
       tags:
         - auth
@@ -97,14 +97,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/MagicLinkVerifyRequest"
+              $ref: "#/components/schemas/SignInCodeVerifyRequest"
       responses:
         "200":
           description: Code verified — returns account info and API key
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MagicLinkVerifyResponse"
+                $ref: "#/components/schemas/SignInCodeVerifyResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
 
@@ -730,7 +730,7 @@ components:
       description: |
         Account API key or OAuth access token.
         Pass it as a Bearer token: `Authorization: Bearer ep_acc_...`
-        Account API keys are created via magic link auth and scoped to an account.
+        Account API keys are created via sign-in code auth and scoped to an account.
 
   parameters:
     CampaignID:
@@ -1213,7 +1213,7 @@ components:
           items:
             $ref: "#/components/schemas/WebhookEndpoint"
 
-    MagicLinkRequest:
+    SignInCodeRequest:
       type: object
       required:
         - email
@@ -1222,7 +1222,7 @@ components:
           type: string
           format: email
 
-    MagicLinkResponse:
+    SignInCodeResponse:
       type: object
       properties:
         message:
@@ -1231,7 +1231,7 @@ components:
           type: string
           description: Opaque token that binds this auth attempt to the requesting client. Must be passed to POST /api/v1/auth/verify along with the emailed code.
 
-    MagicLinkVerifyRequest:
+    SignInCodeVerifyRequest:
       type: object
       required:
         - session_token
@@ -1239,7 +1239,7 @@ components:
       properties:
         session_token:
           type: string
-          description: The session_token returned by POST /api/v1/auth/magic-link.
+          description: The session_token returned by POST /api/v1/auth/signin.
           minLength: 40
         code:
           type: string
@@ -1248,7 +1248,7 @@ components:
           minLength: 6
           maxLength: 6
 
-    MagicLinkVerifyResponse:
+    SignInCodeVerifyResponse:
       type: object
       properties:
         account:

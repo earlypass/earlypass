@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	magicLinkRateLimit    = 3
-	magicLinkRateLimitTTL = 10 * time.Minute
-	magicLinkTTL          = 15 * time.Minute
+	signInRateLimit    = 3
+	signInRateLimitTTL = 10 * time.Minute
+	signInTTL          = 15 * time.Minute
 	oauthCodeTTL          = 5 * time.Minute
 	oauthClientRedisTTL   = 24 * time.Hour
 )
@@ -30,7 +30,7 @@ const (
 // Handler holds OAuth 2.1 handler dependencies.
 type Handler struct {
 	accounts         store.AccountStore
-	magicLinks       store.MagicLinkStore
+	signInTokens       store.SignInTokenStore
 	oauthStore       store.OAuthStore
 	emailOutbox      store.EmailOutboxStore
 	redisStore       *redisstore.Client
@@ -43,7 +43,7 @@ type Handler struct {
 // HandlerDeps contains the dependencies for the OAuth handler.
 type HandlerDeps struct {
 	Accounts         store.AccountStore
-	MagicLinks       store.MagicLinkStore
+	SignInTokens       store.SignInTokenStore
 	OAuthStore       store.OAuthStore
 	EmailOutbox      store.EmailOutboxStore
 	RedisStore       *redisstore.Client
@@ -57,7 +57,7 @@ type HandlerDeps struct {
 func NewHandler(deps HandlerDeps) *Handler {
 	return &Handler{
 		accounts:         deps.Accounts,
-		magicLinks:       deps.MagicLinks,
+		signInTokens:       deps.SignInTokens,
 		oauthStore:       deps.OAuthStore,
 		emailOutbox:      deps.EmailOutbox,
 		redisStore:       deps.RedisStore,
@@ -228,15 +228,15 @@ func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Rate limit magic link requests per email.
-	rateKey := "magic-link-rate:" + emailAddr
-	count, err := h.redisStore.Incr(r.Context(), rateKey, magicLinkRateLimitTTL)
+	// Rate limit sign-in code requests per email.
+	rateKey := "signin-rate:" + emailAddr
+	count, err := h.redisStore.Incr(r.Context(), rateKey, signInRateLimitTTL)
 	if err != nil {
 		h.logger.Error("rate limit check", slog.String("error", err.Error()))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	if count > magicLinkRateLimit {
+	if count > signInRateLimit {
 		http.Error(w, "too many sign-in code requests — try again later", http.StatusTooManyRequests)
 		return
 	}
@@ -249,14 +249,14 @@ func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		State:               state,
 	}
 
-	token, err := domain.NewMagicLinkToken(emailAddr, oauthState, magicLinkTTL)
+	token, err := domain.NewSignInToken(emailAddr, oauthState, signInTTL)
 	if err != nil {
 		h.logger.Error("generating OTP token", slog.String("error", err.Error()))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	if err = h.magicLinks.Create(r.Context(), token); err != nil {
+	if err = h.signInTokens.Create(r.Context(), token); err != nil {
 		h.logger.Error("storing OTP token", slog.String("error", err.Error()))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -275,7 +275,7 @@ func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		Secure:   h.secureCookies,
 	})
 
-	htmlBody, _, err := email.MagicLinkEmail(token.Code)
+	htmlBody, _, err := email.SignInCodeEmail(token.Code)
 	if err != nil {
 		h.logger.Error("rendering sign-in code email", slog.String("error", err.Error()))
 	} else if h.emailOutbox != nil {
@@ -327,7 +327,7 @@ func (h *Handler) VerifyCodePOST(w http.ResponseWriter, r *http.Request) {
 	codeChallengeMethod := r.FormValue("code_challenge_method")
 	state := r.FormValue("state")
 
-	tok, err := h.magicLinks.GetBySessionToken(r.Context(), sessionToken)
+	tok, err := h.signInTokens.GetBySessionToken(r.Context(), sessionToken)
 	if err != nil {
 		http.Error(w, "session not found — please sign in again", http.StatusBadRequest)
 		return
@@ -368,7 +368,7 @@ func (h *Handler) VerifyCodePOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	if err = h.magicLinks.MarkUsed(r.Context(), tok.Token, now); err != nil {
+	if err = h.signInTokens.MarkUsed(r.Context(), tok.Token, now); err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
 			"ClientID": clientID, "RedirectURI": redirectURI,

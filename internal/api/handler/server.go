@@ -21,8 +21,8 @@ type CSRFTokenStore interface {
 	ValidateAndConsumeCSRFToken(ctx context.Context, campaignID uuid.UUID, token string) (bool, error)
 }
 
-// MagicLinkRateLimiter is the interface used for magic link rate limiting.
-type MagicLinkRateLimiter interface {
+// SignInRateLimiter is the interface used for sign-in rate limiting.
+type SignInRateLimiter interface {
 	Incr(ctx context.Context, key string, ttl time.Duration) (int64, error)
 }
 
@@ -32,12 +32,12 @@ type Server struct {
 	signups              store.SignupStore
 	webhooks             store.WebhookStore
 	accounts             store.AccountStore
-	magicLinks           store.MagicLinkStore
+	signInTokens           store.SignInTokenStore
 	accountAPIKeys       store.AccountAPIKeyStore
 	oauthStore           store.OAuthStore
 	fraudLimiter         fraud.IPRateLimiter
 	csrfTokenStore       CSRFTokenStore
-	magicLinkRateLimiter MagicLinkRateLimiter
+	signInRateLimiter SignInRateLimiter
 	emailOutbox          store.EmailOutboxStore
 	dbPinger             DBPinger
 	redisPinger          RedisPinger
@@ -47,7 +47,7 @@ type Server struct {
 	baseURL string
 	// trustedProxies is the list of CIDR ranges trusted to set X-Real-IP / X-Forwarded-For.
 	trustedProxies []string
-	// devMode logs magic link URLs to the terminal instead of requiring a real email delivery.
+	// devMode logs sign-in codes to the terminal instead of requiring a real email delivery.
 	devMode bool
 	// signupModeClosed restricts account creation to pre-existing accounts.
 	signupModeClosed bool
@@ -60,12 +60,12 @@ func NewServer(
 	signups store.SignupStore,
 	webhooks store.WebhookStore,
 	accounts store.AccountStore,
-	magicLinks store.MagicLinkStore,
+	signInTokens store.SignInTokenStore,
 	accountAPIKeys store.AccountAPIKeyStore,
 	oauthStore store.OAuthStore,
 	fraudLimiter fraud.IPRateLimiter,
 	csrfTokenStore CSRFTokenStore,
-	magicLinkRateLimiter MagicLinkRateLimiter,
+	signInRateLimiter SignInRateLimiter,
 	emailOutbox store.EmailOutboxStore,
 	dbPinger DBPinger,
 	redisPinger RedisPinger,
@@ -81,12 +81,12 @@ func NewServer(
 		signups:              signups,
 		webhooks:             webhooks,
 		accounts:             accounts,
-		magicLinks:           magicLinks,
+		signInTokens:           signInTokens,
 		accountAPIKeys:       accountAPIKeys,
 		oauthStore:           oauthStore,
 		fraudLimiter:         fraudLimiter,
 		csrfTokenStore:       csrfTokenStore,
-		magicLinkRateLimiter: magicLinkRateLimiter,
+		signInRateLimiter: signInRateLimiter,
 		emailOutbox:          emailOutbox,
 		dbPinger:             dbPinger,
 		redisPinger:          redisPinger,
