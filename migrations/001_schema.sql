@@ -108,15 +108,15 @@ CREATE TRIGGER accounts_updated_at
 -- the requesting session.
 CREATE TABLE signin_tokens (
   token         TEXT        PRIMARY KEY,
-  code          TEXT        NOT NULL DEFAULT '',
-  session_token TEXT        NOT NULL DEFAULT '',
+  code          TEXT        NOT NULL CHECK (code ~ '^[0-9]{6}$'),
+  session_token TEXT        NOT NULL CHECK (session_token <> ''),
   email         TEXT        NOT NULL,
   oauth_state   JSONB,
   expires_at    TIMESTAMPTZ NOT NULL,
   used_at       TIMESTAMPTZ
 );
 CREATE INDEX idx_signin_tokens_email ON signin_tokens(email);
-CREATE INDEX idx_signin_tokens_session ON signin_tokens(session_token);
+CREATE UNIQUE INDEX idx_signin_tokens_session ON signin_tokens(session_token);
 
 -- key_hash stores SHA-256 hex of the raw key (not bcrypt)
 CREATE TABLE account_api_keys (

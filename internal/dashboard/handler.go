@@ -232,12 +232,12 @@ func (d *Dashboard) LoginPOST(w http.ResponseWriter, r *http.Request) {
 
 	tok, err := domain.NewSignInToken(emailAddr, nil, 15*time.Minute)
 	if err != nil {
-		d.Logger.ErrorContext(r.Context(), "creating sign-in token token", slog.String("error", err.Error()))
+		d.Logger.ErrorContext(r.Context(), "creating sign-in token", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
 		return
 	}
 	if err = d.SignInTokens.Create(r.Context(), tok); err != nil {
-		d.Logger.ErrorContext(r.Context(), "storing sign-in token token", slog.String("error", err.Error()))
+		d.Logger.ErrorContext(r.Context(), "storing sign-in token", slog.String("error", err.Error()))
 		problem.Write(w, http.StatusInternalServerError, "internal", "Internal Server Error", "")
 		return
 	}
@@ -308,6 +308,11 @@ func (d *Dashboard) VerifyPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sessionToken := sessionCookie.Value
+	if sessionToken == "" {
+		// Empty cookie value is invalid — treat as missing session.
+		http.Redirect(w, r, "/dashboard/login", http.StatusFound)
+		return
+	}
 
 	if err = r.ParseForm(); err != nil {
 		problem.Write(w, http.StatusBadRequest, "bad-request", "Bad Request", "invalid form data")

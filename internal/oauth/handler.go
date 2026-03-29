@@ -213,6 +213,22 @@ func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	if h.signupModeClosed {
 		if _, err := h.accounts.GetByEmail(r.Context(), emailAddr); err != nil {
 			h.logger.Info("closed mode: oauth authorize for unknown email", slog.String("email", emailAddr))
+			// Set a fake session cookie so the response is indistinguishable from
+			// a real sign-in (same Set-Cookie header, same form rendered). Any code
+			// submitted against this fake token will return a generic "invalid code"
+			// error because no matching row exists in the database.
+			fakeToken, genErr := domain.NewSignInToken(emailAddr, nil, signInTTL)
+			if genErr == nil {
+				http.SetCookie(w, &http.Cookie{
+					Name:     oauthOTPSessionCookieName,
+					Value:    fakeToken.SessionToken,
+					Path:     "/oauth",
+					MaxAge:   900,
+					HttpOnly: true,
+					SameSite: http.SameSiteLaxMode,
+					Secure:   h.secureCookies,
+				})
+			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
 				"ClientID":            clientID,
@@ -312,14 +328,6 @@ func (h *Handler) VerifyCodePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionCookie, err := r.Cookie(oauthOTPSessionCookieName)
-	if err != nil {
-		// No session cookie — redirect back to authorize.
-		http.Error(w, "session expired — please sign in again", http.StatusBadRequest)
-		return
-	}
-	sessionToken := sessionCookie.Value
-
 	otpCode := strings.TrimSpace(r.FormValue("code"))
 	clientID := r.FormValue("client_id")
 	redirectURI := r.FormValue("redirect_uri")
@@ -327,56 +335,63 @@ func (h *Handler) VerifyCodePOST(w http.ResponseWriter, r *http.Request) {
 	codeChallengeMethod := r.FormValue("code_challenge_method")
 	state := r.FormValue("state")
 
+	// renderFormError re-renders the code-entry form with an error message so
+	// the UX is consistent regardless of whether the failure is a missing session,
+	// an invalid code format, an unknown session, or a wrong code.
+	renderFormError := func(msg string) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
+			"ClientID": clientID, "RedirectURI": redirectURI,
+			"CodeChallenge": codeChallenge, "CodeChallengeMethod": codeChallengeMethod,
+			"State": state, "Error": msg,
+		}); tmplErr != nil {
+			h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
+		}
+	}
+
+	sessionCookie, err := r.Cookie(oauthOTPSessionCookieName)
+	if err != nil || sessionCookie.Value == "" {
+		// No (or empty) session cookie — re-render form with generic error.
+		renderFormError("Session expired. Please sign in again.")
+		return
+	}
+	sessionToken := sessionCookie.Value
+
+	// Validate code format before hitting the store.
+	if len(otpCode) != 6 {
+		renderFormError("Please enter the 6-digit code from your email.")
+		return
+	}
+	for _, c := range otpCode {
+		if c < '0' || c > '9' {
+			renderFormError("The code must contain only digits.")
+			return
+		}
+	}
+
 	tok, err := h.signInTokens.GetBySessionToken(r.Context(), sessionToken)
 	if err != nil {
-		http.Error(w, "session not found — please sign in again", http.StatusBadRequest)
+		// Session not found — could be expired, consumed, or a fake anti-enumeration token.
+		renderFormError("Invalid or expired code. Please sign in again.")
 		return
 	}
 
 	if tok.IsExpired() {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
-			"ClientID": clientID, "RedirectURI": redirectURI,
-			"CodeChallenge": codeChallenge, "CodeChallengeMethod": codeChallengeMethod,
-			"State": state, "Error": "This code has expired. Please sign in again.",
-		}); tmplErr != nil {
-			h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
-		}
+		renderFormError("This code has expired. Please sign in again.")
 		return
 	}
 	if tok.IsUsed() {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
-			"ClientID": clientID, "RedirectURI": redirectURI,
-			"CodeChallenge": codeChallenge, "CodeChallengeMethod": codeChallengeMethod,
-			"State": state, "Error": "This code has already been used. Please sign in again.",
-		}); tmplErr != nil {
-			h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
-		}
+		renderFormError("This code has already been used. Please sign in again.")
 		return
 	}
 	if tok.Code != otpCode {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
-			"ClientID": clientID, "RedirectURI": redirectURI,
-			"CodeChallenge": codeChallenge, "CodeChallengeMethod": codeChallengeMethod,
-			"State": state, "Error": "Incorrect code. Please try again.",
-		}); tmplErr != nil {
-			h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
-		}
+		renderFormError("Incorrect code. Please try again.")
 		return
 	}
 
 	now := time.Now().UTC()
 	if err = h.signInTokens.MarkUsed(r.Context(), tok.Token, now); err != nil {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if tmplErr := oauthCodeFormTmpl.Execute(w, map[string]string{
-			"ClientID": clientID, "RedirectURI": redirectURI,
-			"CodeChallenge": codeChallenge, "CodeChallengeMethod": codeChallengeMethod,
-			"State": state, "Error": "This code has already been used. Please sign in again.",
-		}); tmplErr != nil {
-			h.logger.Error("rendering oauth code form", slog.String("error", tmplErr.Error()))
-		}
+		renderFormError("This code has already been used. Please sign in again.")
 		return
 	}
 

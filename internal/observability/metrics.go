@@ -115,9 +115,9 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("fraud_blocks_total: %w", err)
 	}
 
-	magicLinks, err := meter.Int64Counter(
+	signInRequests, err := meter.Int64Counter(
 		"auth_signin_requests_total",
-		metric.WithDescription("Magic link requests, labelled by result (sent/rate_limited)"),
+		metric.WithDescription("Sign-in code requests, labelled by result (sent/rate_limited)"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auth_signin_requests_total: %w", err)
@@ -157,7 +157,7 @@ func NewMetrics() (*Metrics, error) {
 		EmailSentTotal:           emailSent,
 		WebhookDeliveriesTotal:   webhooks,
 		FraudBlocksTotal:         fraudBlocks,
-		SignInRequestsTotal:   magicLinks,
+		SignInRequestsTotal:      signInRequests,
 		OutboxPending:            outboxPending,
 		WebhookPending:           webhookPending,
 		ActiveCampaigns:          activeCampaigns,
