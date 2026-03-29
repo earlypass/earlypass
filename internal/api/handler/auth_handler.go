@@ -56,18 +56,25 @@ func (s *Server) RequestMagicLink(ctx context.Context, req generated.RequestMagi
 
 	// In closed mode, only send codes to existing accounts.
 	// Always return the same response regardless — no user enumeration.
+	// Return a random but non-functional session token so the response shape and
+	// timing are indistinguishable from a successful request.
 	if s.signupModeClosed {
 		if _, err := s.accounts.GetByEmail(ctx, emailAddr); err != nil {
 			if s.metrics != nil {
 				s.metrics.RecordMagicLinkRequest(ctx, "closed_rejected")
 			}
 			s.logger.InfoContext(ctx, "closed mode: sign-in code request for unknown email", slog.String("email", emailAddr))
+			// Generate a random-looking (but non-stored) session token so the
+			// response is structurally identical to a real one.
+			fakeToken, genErr := domain.NewMagicLinkToken(emailAddr, nil, magicLinkTokenTTL)
+			fakeSessionToken := ""
+			if genErr == nil {
+				fakeSessionToken = fakeToken.SessionToken
+			}
 			msg := "If an account exists for this email, a sign-in code has been sent."
-			// Return an empty session_token so the response shape is consistent.
-			empty := ""
 			return generated.RequestMagicLink202JSONResponse{
 				Message:      &msg,
-				SessionToken: &empty,
+				SessionToken: &fakeSessionToken,
 			}, nil
 		}
 	}

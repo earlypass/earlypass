@@ -319,6 +319,13 @@ func (d *Dashboard) VerifyPOST(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(otpFormHTML("Please enter the 6-digit code from your email.")))
 		return
 	}
+	for _, c := range code {
+		if c < '0' || c > '9' {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(otpFormHTML("The code must contain only digits.")))
+			return
+		}
+	}
 
 	tok, err := d.MagicLinks.GetBySessionToken(r.Context(), sessionToken)
 	if err != nil {

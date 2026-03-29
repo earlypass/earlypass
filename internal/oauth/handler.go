@@ -36,6 +36,7 @@ type Handler struct {
 	redisStore       *redisstore.Client
 	baseURL          string
 	signupModeClosed bool
+	secureCookies    bool
 	logger           *slog.Logger
 }
 
@@ -48,6 +49,7 @@ type HandlerDeps struct {
 	RedisStore       *redisstore.Client
 	BaseURL          string
 	SignupModeClosed bool
+	SecureCookies    bool
 	Logger           *slog.Logger
 }
 
@@ -61,6 +63,7 @@ func NewHandler(deps HandlerDeps) *Handler {
 		redisStore:       deps.RedisStore,
 		baseURL:          deps.BaseURL,
 		signupModeClosed: deps.SignupModeClosed,
+		secureCookies:    deps.SecureCookies,
 		logger:           deps.Logger,
 	}
 }
@@ -269,6 +272,7 @@ func (h *Handler) AuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   900, // 15 minutes — matches the OTP TTL
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   h.secureCookies,
 	})
 
 	htmlBody, _, err := email.MagicLinkEmail(token.Code)
@@ -384,6 +388,7 @@ func (h *Handler) VerifyCodePOST(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   h.secureCookies,
 	})
 
 	var account domain.Account

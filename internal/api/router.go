@@ -261,6 +261,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		RedisStore:       redisStore,
 		BaseURL:          deps.BaseURL,
 		SignupModeClosed: deps.SignupModeClosed,
+		SecureCookies:    deps.SecureCookies,
 		Logger:           deps.Logger,
 	})
 
