@@ -8,12 +8,12 @@
   },
   "dependencies": {
     "htm": "^3.1.1",
-    "preact": "^10.25.4",
+    "preact": "^10.29.1",
     "uplot": "^1.6.31"
   },
   "devDependencies": {
-    "esbuild": "^0.27.4",
-    "typescript": "^6.0.2"
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.3"
   },
   "license": "BUSL-1.1"
 }
